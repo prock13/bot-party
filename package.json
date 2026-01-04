@@ -1,0 +1,12 @@
+{
+	"name": "bot-party",
+	"version": "0.0.0",
+	"description": "Simulate social deduction games with AI agents",
+	"license": "ISC",
+	"author": "Chris Moscoso",
+	"type": "commonjs",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	}
+}
