@@ -4,7 +4,7 @@
 	"description": "Simulate social deduction games with AI agents",
 	"license": "ISC",
 	"author": "Chris Moscoso",
-	"type": "commonjs",
+	"type": "module",
 	"main": "index.js",
 	"scripts": {
 		"build": "tsc",
