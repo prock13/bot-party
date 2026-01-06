@@ -4,8 +4,14 @@ import { allLocationsList, LOCATIONS } from "./data";
 import { Agent } from "./agent";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
 
+/** ---------- small utilities ---------- */
+
 function pickRandom<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function safePickRandom<T>(arr: T[], fallback: T): T {
+    return arr.length ? pickRandom(arr) : fallback;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -16,6 +22,21 @@ function shuffle<T>(arr: T[]): T[] {
     }
     return a;
 }
+
+function normalizeName(s: string): string {
+    return s.trim().toLowerCase();
+}
+
+/** Resolve a target by name, but never allow selecting self; always fall back to "someone else". */
+function resolveOtherPlayer(players: Player[], targetName: string, excludeId: PlayerId): Player {
+    const byName = players.find(p => normalizeName(p.name) === normalizeName(targetName));
+    if (byName && byName.id !== excludeId) return byName;
+
+    const notSelf = players.filter(p => p.id !== excludeId);
+    return safePickRandom(notSelf, players.find(p => p.id !== excludeId) ?? players[0]);
+}
+
+/** ---------- prompt helpers ---------- */
 
 function secretToBrief(secret: PlayerSecret): string {
     if (secret.kind === "SPY") return "You are the SPY. You do NOT know the location.";
@@ -45,7 +66,7 @@ Rules:
     return common + personal;
 }
 
-function buildAskerInstruction(players: Player[], asker: Player): string {
+function buildAskerInstruction(players: Player[], _asker: Player): string {
     const names = players.map(p => p.name).join(", ");
     return `
 Players: ${names}
@@ -114,6 +135,77 @@ function parseField(text: string, field: string): string {
     return (line?.split(":").slice(1).join(":").trim()) || "";
 }
 
+/** ---------- PlayerController (minimal, high-impact) ---------- */
+
+type AskResult = { targetName: string; question: string };
+
+interface PlayerController {
+    ask(players: Player[], self: Player): Promise<AskResult>;
+    answer(askerName: string, question: string): Promise<string>;
+    guessLocation(turns: Turn[], self: Player): Promise<string | null>;
+    vote(players: Player[], turns: Turn[], self: Player): Promise<string>;
+}
+
+class HumanController implements PlayerController {
+    constructor(private rl: ReturnType<typeof readline.createInterface>) {}
+
+    async ask(players: Player[], _self: Player): Promise<AskResult> {
+        console.log(`Your turn to ask a question.`);
+        const targetName = await this.rl.question(`Choose a target (${players.map(p => p.name).join(", ")}): `);
+        const question = await this.rl.question(`Your question: `);
+        return { targetName, question };
+    }
+
+    async answer(askerName: string, question: string): Promise<string> {
+        console.log(`\n${askerName} asked you: ${question}`);
+        return await this.rl.question(`Your answer: `);
+    }
+
+    async guessLocation(_turns: Turn[], self: Player): Promise<string | null> {
+        if (self.secret.kind !== "SPY") return null;
+        const guess = await this.rl.question("You are the SPY. Guess the location (or press Enter to skip): ");
+        return guess.trim() ? guess.trim() : null;
+    }
+
+    async vote(players: Player[], _turns: Turn[], self: Player): Promise<string> {
+        const candidates = players.map(p => p.name).filter(n => n !== self.name);
+        return await this.rl.question(`Your vote for SPY (${candidates.join(", ")}): `);
+    }
+}
+
+class AgentController implements PlayerController {
+    constructor(private agent: Agent) {}
+
+    async ask(players: Player[], self: Player): Promise<AskResult> {
+        const askText = await this.agent.say(buildAskerInstruction(players, self));
+        const parsed = parseAsk(askText);
+
+        // Keep behavior resilient: if model fails format, fall back safely.
+        const fallbackTarget = safePickRandom(players.filter(p => p.id !== self.id), players[0]).name;
+        return {
+            targetName: parsed.targetName || fallbackTarget,
+            question: parsed.question || "What’s something you’d expect to see around you right now?"
+        };
+    }
+
+    async answer(askerName: string, question: string): Promise<string> {
+        return await this.agent.say(buildAnswerInstruction(askerName, question));
+    }
+
+    async guessLocation(turns: Turn[], self: Player): Promise<string | null> {
+        if (self.secret.kind !== "SPY") return null;
+        const guessText = await this.agent.say(buildSpyGuessPrompt(turns));
+        return guessText.trim() || null;
+    }
+
+    async vote(players: Player[], turns: Turn[], self: Player): Promise<string> {
+        const voteText = await this.agent.say(buildVotePrompt(players, turns, self.name));
+        return parseField(voteText, "VOTE");
+    }
+}
+
+/** ---------- game ---------- */
+
 export class SpyfallGame {
     private rl: ReturnType<typeof readline.createInterface> | null = null;
     private running = false;
@@ -123,13 +215,12 @@ export class SpyfallGame {
         if (this.running) return;
         this.running = true;
 
-        // ✅ Create readline inside run (so a restarted process doesn't reuse a weird handle)
+        // ✅ Create readline inside run
         this.rl = readline.createInterface({ input, output });
 
         try {
             const pack = pickRandom(LOCATIONS);
             const spyIndex = Math.floor(Math.random() * config.numPlayers);
-
             const roles = shuffle(pack.roles).slice(0, config.numPlayers - 1);
 
             const players: Player[] = [];
@@ -148,10 +239,14 @@ export class SpyfallGame {
                 players.push({ id: name, name, isHuman, secret });
             }
 
-            const agents = new Map<PlayerId, Agent>();
+            // Build controllers (big win: no more branching each turn)
+            const controllers = new Map<PlayerId, PlayerController>();
             for (const p of players) {
-                if (!p.isHuman) {
-                    agents.set(p.id, new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret)));
+                if (p.isHuman) {
+                    controllers.set(p.id, new HumanController(this.rl));
+                } else {
+                    const agent = new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret));
+                    controllers.set(p.id, new AgentController(agent));
                 }
             }
 
@@ -166,73 +261,52 @@ export class SpyfallGame {
             const order = shuffle(players);
 
             console.log(`Game started with ${players.length} players. Rounds: ${config.rounds}\n`);
-            const startingSpy = order.find(p => p.secret.kind === "SPY");
-            console.log("SPY IS:", startingSpy?.name, "Location is:", pack.location);
+
+            // Debug reveal gated (avoid accidental leak)
+            if ((config as any).debug) {
+                const startingSpy = order.find(p => p.secret.kind === "SPY");
+                console.log("DEBUG — SPY IS:", startingSpy?.name, "Location is:", pack.location);
+            }
 
             for (let r = 0; r < config.rounds; r++) {
                 const asker = order[r % order.length];
+                const askerCtl = controllers.get(asker.id)!;
 
-                let targetName = "";
-                let question = "";
+                const asked = await askerCtl.ask(players, asker);
+                const target = resolveOtherPlayer(players, asked.targetName, asker.id);
+                const targetCtl = controllers.get(target.id)!;
 
-                if (asker.isHuman) {
-                    console.log(`Your turn to ask a question.`);
-                    targetName = await this.rl.question(`Choose a target (${players.map(p => p.name).join(", ")}): `);
-                    question = await this.rl.question(`Your question: `);
-                } else {
-                    const agent = agents.get(asker.id)!;
-                    const askText = await agent.say(buildAskerInstruction(players, asker));
-                    const parsed = parseAsk(askText);
-                    targetName = parsed.targetName || pickRandom(players).name;
-                    question = parsed.question || "What’s something you’d expect to see around you right now?";
-                }
+                const answer = await targetCtl.answer(asker.name, asked.question);
 
-                const target =
-                    players.find(p => p.name.toLowerCase() === targetName.toLowerCase()) ||
-                    pickRandom(players.filter(p => p.id !== asker.id));
-
-                let answer = "";
-                if (target.isHuman) {
-                    console.log(`\n${asker.name} asked you: ${question}`);
-                    answer = await this.rl.question(`Your answer: `);
-                } else {
-                    const agent = agents.get(target.id)!;
-                    answer = await agent.say(buildAnswerInstruction(asker.name, question));
-                }
-
-                turns.push({ askerId: asker.name, targetId: target.name, question, answer });
+                turns.push({ askerId: asker.name, targetId: target.name, question: asked.question, answer });
 
                 console.log(`\n[Turn ${r + 1}] ${asker.name} -> ${target.name}`);
-                console.log(`Q: ${question}`);
+                console.log(`Q: ${asked.question}`);
                 console.log(`A: ${answer}\n`);
             }
 
             const spy = players.find(p => p.secret.kind === "SPY")!;
             console.log("=== SPY GUESS PHASE ===");
+            const guess = await controllers.get(spy.id)!.guessLocation(turns, spy);
+
             if (spy.isHuman) {
-                const guess = await this.rl.question("You are the SPY. Guess the location (or press Enter to skip): ");
-                console.log(guess.trim() ? `You guessed: ${guess.trim()}` : "You skipped guessing.");
+                console.log(guess ? `You guessed: ${guess}` : "You skipped guessing.");
             } else {
-                const spyAgent = agents.get(spy.id)!;
-                const guessText = await spyAgent.say(buildSpyGuessPrompt(turns));
-                console.log(`${spy.name}:\n${guessText}\n`);
+                console.log(`${spy.name}:\n${guess ?? ""}\n`);
             }
 
             console.log("=== VOTING PHASE ===");
             const votes = new Map<string, number>();
 
             for (const p of players) {
-                let voteName = "";
-                if (p.isHuman) {
-                    voteName = await this.rl.question(`Your vote for SPY (${players.map(x => x.name).join(", ")}): `);
-                } else {
-                    const agent = agents.get(p.id)!;
-                    const voteText = await agent.say(buildVotePrompt(players, turns, p.name));
-                    voteName = parseField(voteText, "VOTE");
-                }
+                const ctl = controllers.get(p.id)!;
+                const voteName = await ctl.vote(players, turns, p);
 
-                const normalized = players.find(x => x.name.toLowerCase() === voteName.toLowerCase())?.name;
-                const finalVote = normalized || pickRandom(players).name;
+                // Enforce: cannot vote for self
+                const candidates = players.filter(x => x.name !== p.name);
+                const normalized = candidates.find(x => normalizeName(x.name) === normalizeName(voteName))?.name;
+                const finalVote = normalized || safePickRandom(candidates, spy).name;
+
                 votes.set(finalVote, (votes.get(finalVote) || 0) + 1);
                 console.log(`${p.name} voted: ${finalVote}`);
             }
@@ -251,14 +325,12 @@ export class SpyfallGame {
             console.log(spyCaught ? "Civilians win (spy caught)!" : "Spy wins (not caught)!");
             console.log("===============");
 
-            // ✅ Optional: hard-stop (useful while debugging watch issues)
             // process.exit(0);
-
         } finally {
             // ✅ Always close readline exactly once
             try {
                 this.rl?.close();
-            } catch { }
+            } catch {}
             this.rl = null;
             this.running = false;
         }
