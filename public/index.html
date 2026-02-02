@@ -106,6 +106,36 @@
       border-top: 1px solid var(--border);
       background: var(--bg);
     }
+    /* Inline debug: collapsible between log lines */
+    .inspect-inline {
+      margin: 0.35rem 0;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .inspect-inline summary {
+      padding: 0.35rem 0.6rem;
+      cursor: pointer;
+      color: var(--muted);
+      list-style: none;
+      font-size: 0.8rem;
+    }
+    .inspect-inline summary::-webkit-details-marker { display: none; }
+    .inspect-inline summary:hover { color: var(--accent); }
+    .inspect-inline .debug-block {
+      padding: 0.5rem 0.6rem;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 180px;
+      overflow: auto;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+    .inspect-inline .debug-block + .debug-block { border-top: 1px solid var(--border); }
+    .inspect-inline .debug-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.15rem; }
   </style>
 </head>
 <body>
@@ -143,7 +173,7 @@
       details.open = true;
       const summary = document.createElement("summary");
       summary.textContent = title;
-      const body = document.createElement("pre");
+      const body = document.createElement("div");
       body.className = "section-body";
       if (firstLine) body.appendChild(document.createTextNode(firstLine + "\n"));
       details.appendChild(summary);
@@ -153,10 +183,50 @@
       currentBody = body;
     }
 
+    function isNearBottom(el) {
+      var threshold = 80;
+      return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    }
+    function maybeScrollToBottom() {
+      if (isNearBottom(logEl)) logEl.scrollTop = logEl.scrollHeight;
+    }
+
     function appendLine(line) {
       if (!currentBody) startSection("Intro", line);
       else currentBody.appendChild(document.createTextNode(line + "\n"));
-      logEl.scrollTop = logEl.scrollHeight;
+      maybeScrollToBottom();
+    }
+
+    function appendDebugEntry(entry) {
+      if (!currentBody) startSection("Intro", null);
+      const phase = entry.phase.charAt(0).toUpperCase() + entry.phase.slice(1);
+      const details = document.createElement("details");
+      details.className = "inspect-inline";
+      const summary = document.createElement("summary");
+      summary.textContent = "📋 " + phase + " (" + entry.agentName + ") — prompt & response";
+      details.appendChild(summary);
+      const promptBlock = document.createElement("div");
+      promptBlock.className = "debug-block";
+      const promptLabel = document.createElement("div");
+      promptLabel.className = "debug-label";
+      promptLabel.textContent = "Prompt (messages sent)";
+      promptBlock.appendChild(promptLabel);
+      const promptPre = document.createElement("pre");
+      promptPre.textContent = (entry.messages || []).map(function(m) { return "[" + m.role + "]\n" + m.content; }).join("\n\n");
+      promptBlock.appendChild(promptPre);
+      details.appendChild(promptBlock);
+      const responseBlock = document.createElement("div");
+      responseBlock.className = "debug-block";
+      const responseLabel = document.createElement("div");
+      responseLabel.className = "debug-label";
+      responseLabel.textContent = "Response";
+      responseBlock.appendChild(responseLabel);
+      const responsePre = document.createElement("pre");
+      responsePre.textContent = entry.response || "(empty)";
+      responseBlock.appendChild(responsePre);
+      details.appendChild(responseBlock);
+      currentBody.appendChild(details);
+      maybeScrollToBottom();
     }
 
     function handleLine(line) {
@@ -173,12 +243,18 @@
       statusEl.textContent = "Connected";
       statusEl.classList.remove("live");
     };
-    es.onmessage = (e) => {
+    es.addEventListener("log", (e) => {
       try {
         const { line } = JSON.parse(e.data);
         if (line) handleLine(line);
       } catch (_) {}
-    };
+    });
+    es.addEventListener("prompt", (e) => {
+      try {
+        const entry = JSON.parse(e.data);
+        appendDebugEntry(entry);
+      } catch (_) {}
+    });
     es.onerror = () => {
       statusEl.textContent = "Reconnecting…";
       statusEl.classList.remove("live");

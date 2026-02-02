@@ -7,7 +7,7 @@ export class AIController implements PlayerController {
     constructor(private agent: Agent) {}
 
     async ask(players: Player[], self: Player): Promise<AskResult> {
-        const askText = await this.agent.say(buildAskerInstruction(players, self));
+        const askText = await this.agent.say(buildAskerInstruction(players, self), "ask a question");
         return {
             targetName: parseField("TARGET", askText),
             question: parseField("QUESTION", askText),
@@ -16,15 +16,15 @@ export class AIController implements PlayerController {
     }
 
     async answer(askerName: string, question: string): Promise<string> {
-        return await this.agent.say(buildAnswerInstruction(askerName, question));
+        return await this.agent.say(buildAnswerInstruction(askerName, question), "answer a question");
     }
 
     async guessLocation(turns: Turn[], self: Player): Promise<string | null> {
         if (self.secret.kind !== "SPY") return null;
-        return await this.agent.say(buildSpyGuessPrompt(turns));
+        return await this.agent.say(buildSpyGuessPrompt(turns), "guess the location");
     }
 
     async vote(players: Player[], turns: Turn[], self: Player): Promise<string> {
-        return await this.agent.say(buildVotePrompt(players, turns, self.name));
+        return await this.agent.say(buildVotePrompt(players, turns, self.name), "vote");
     }
 }

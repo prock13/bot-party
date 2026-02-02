@@ -1,7 +1,7 @@
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { allLocationsList, LOCATIONS } from "./data";
-import { Agent } from "./agent";
+import { LOCATIONS } from "./data";
+import { Agent, type PromptEntry } from "./agent";
 import { AIController, HumanController, PlayerController } from "./controllers";
 import { GameConfig, Player, PlayerId, PlayerSecret, Turn } from "./types";
 import { parseField, buildPlayerSystemPrompt, secretToBrief } from "./prompts";
@@ -83,6 +83,8 @@ export class SpyfallGame {
     private running = false;
     /** When set, each log line is also sent here (e.g. for SSE streaming to a web client). */
     public onOutput?: GameReporter;
+    /** When set, each AI prompt/response pair is sent here (e.g. for inspection). */
+    public onPrompt?: (entry: PromptEntry) => void;
 
     private log(msg: string): void {
         console.log(msg);
@@ -131,7 +133,7 @@ export class SpyfallGame {
         for (const p of players) {
             controllers.set(p.id, p.isHuman
                 ? new HumanController(this.rl!)
-                : new AIController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret)))
+                : new AIController(new Agent(p.name, buildPlayerSystemPrompt(p.name, p.secret), this.onPrompt))
             );
         }
         return { pack, players, controllers };

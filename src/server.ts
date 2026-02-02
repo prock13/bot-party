@@ -3,16 +3,28 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SpyfallGame } from "./game";
+import type { PromptEntry } from "./agent";
 import type { GameConfig } from "./types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 
-/** SSE clients: each can receive broadcast lines. */
-const sseClients: Set<(line: string) => void> = new Set();
+/** SSE clients: each can receive broadcast payloads (full SSE message). */
+const sseClients: Set<(payload: string) => void> = new Set();
 
 function broadcast(line: string): void {
-    const payload = `data: ${JSON.stringify({ line })}\n\n`;
+    const payload = `event: log\ndata: ${JSON.stringify({ line })}\n\n`;
+    for (const send of sseClients) {
+        try {
+            send(payload);
+        } catch {
+            // client may have disconnected
+        }
+    }
+}
+
+function broadcastPrompt(entry: PromptEntry): void {
+    const payload = `event: prompt\ndata: ${JSON.stringify(entry)}\n\n`;
     for (const send of sseClients) {
         try {
             send(payload);
@@ -50,6 +62,7 @@ async function handleStart(res: ServerResponse): Promise<void> {
 
     const game = new SpyfallGame();
     game.onOutput = broadcast;
+    game.onPrompt = broadcastPrompt;
 
     res.writeHead(202, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, message: "Game started. Watch the stream." }));
@@ -61,6 +74,7 @@ async function handleStart(res: ServerResponse): Promise<void> {
         broadcast(`\n[Error: ${err instanceof Error ? err.message : String(err)}]`);
     } finally {
         game.onOutput = undefined;
+        game.onPrompt = undefined;
     }
 }
 
