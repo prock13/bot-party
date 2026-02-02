@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Party — Spyfall Stream</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a20;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --accent: #a78bfa;
+      --green: #22c55e;
+      --border: #27272a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    h1 { margin: 0; font-size: 1.25rem; font-weight: 600; color: var(--accent); }
+    .controls { display: flex; gap: 0.5rem; align-items: center; }
+    button {
+      font: inherit;
+      padding: 0.5rem 1rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status {
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    .status.live { color: var(--green); }
+    main {
+      flex: 1;
+      padding: 1rem 1.5rem;
+      overflow: auto;
+    }
+    #log {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      min-height: 320px;
+      max-height: 70vh;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    #log:empty::before {
+      content: "Click “Start game” to run a match. Output will stream here.";
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🕵️ Bot Party — Spyfall</h1>
+    <div class="controls">
+      <span id="status" class="status">Disconnected</span>
+      <button id="start" type="button">Start game</button>
+    </div>
+  </header>
+  <main>
+    <pre id="log"></pre>
+  </main>
+  <script>
+    const logEl = document.getElementById("log");
+    const startBtn = document.getElementById("start");
+    const statusEl = document.getElementById("status");
+
+    const es = new EventSource("/api/stream");
+    es.onopen = () => {
+      statusEl.textContent = "Connected";
+      statusEl.classList.remove("live");
+    };
+    es.onmessage = (e) => {
+      try {
+        const { line } = JSON.parse(e.data);
+        if (line) {
+          logEl.appendChild(document.createTextNode(line + "\n"));
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+      } catch (_) {}
+    };
+    es.onerror = () => {
+      statusEl.textContent = "Reconnecting…";
+      statusEl.classList.remove("live");
+    };
+
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      statusEl.textContent = "Starting…";
+      statusEl.classList.add("live");
+      try {
+        const r = await fetch("/api/start", { method: "POST" });
+        if (!r.ok) throw new Error(await r.text());
+        statusEl.textContent = "Game running — watch stream below";
+      } catch (err) {
+        statusEl.textContent = "Error: " + (err instanceof Error ? err.message : String(err));
+        logEl.appendChild(document.createTextNode("\n[Request failed: " + (err instanceof Error ? err.message : String(err)) + "]\n"));
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

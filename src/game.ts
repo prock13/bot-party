@@ -76,14 +76,25 @@ type TallyResult = {
     spy: Player;
 };
 
+export type GameReporter = (line: string) => void;
+
 export class SpyfallGame {
     private rl: ReturnType<typeof readline.createInterface> | null = null;
     private running = false;
+    /** When set, each log line is also sent here (e.g. for SSE streaming to a web client). */
+    public onOutput?: GameReporter;
+
+    private log(msg: string): void {
+        console.log(msg);
+        this.onOutput?.(msg);
+    }
 
     async run(config: GameConfig) {
         if (this.running) return;
         this.running = true;
-        this.rl = readline.createInterface({ input, output });
+        if (config.includeHuman) {
+            this.rl = readline.createInterface({ input, output });
+        }
 
         try {
             const { pack, players, controllers } = this.setupGame(config);
@@ -128,7 +139,7 @@ export class SpyfallGame {
 
     private revealHumanIdentity(players: Player[]): void {
         const human = players.find(p => p.isHuman);
-        if (human) console.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
+        if (human) this.log(`\n=== YOUR IDENTITY ===\n${secretToBrief(human.secret)}\n=====================\n`);
     }
 
     private async runQuestionRounds(
@@ -141,14 +152,14 @@ export class SpyfallGame {
         let currentAsker = pickRandom(players);
         let lastAsker: Player | null = null;
 
-        console.log(`🚀 Game started! ${currentAsker.name} will ask the first question.`);
+        this.log(`🚀 Game started! ${currentAsker.name} will ask the first question.`);
 
         while (roundCount < numRounds) {
             roundCount++;
             const askerCtl = controllers.get(currentAsker.id)!;
             const rawAsk = await askerCtl.ask(players, currentAsker);
 
-            if (rawAsk.thought) console.log(`\n💭 ${currentAsker.name}'s Strategy: "${rawAsk.thought}"`);
+            if (rawAsk.thought) this.log(`\n💭 ${currentAsker.name}'s Strategy: "${rawAsk.thought}"`);
 
             const target = resolveOtherPlayer(players, rawAsk.targetName, currentAsker.id, lastAsker?.id);
             const targetCtl = controllers.get(target.id)!;
@@ -156,12 +167,12 @@ export class SpyfallGame {
 
             const targetThought = parseField("THOUGHT", rawAnswer);
             const publicAnswer = parseField("ANSWER", rawAnswer) || rawAnswer;
-            if (targetThought) console.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
+            if (targetThought) this.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
 
             turns.push({ askerId: currentAsker.name, targetId: target.name, question: rawAsk.question, answer: publicAnswer });
-            console.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}`);
-            console.log(`Q: ${rawAsk.question}`);
-            console.log(`A: ${publicAnswer}`);
+            this.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}`);
+            this.log(`Q: ${rawAsk.question}`);
+            this.log(`A: ${publicAnswer}`);
 
             lastAsker = currentAsker;
             currentAsker = target;
@@ -174,7 +185,7 @@ export class SpyfallGame {
         controllers: Map<PlayerId, PlayerController>,
         turns: Turn[]
     ): Promise<Map<string, number>> {
-        console.log("\n=== 🗳️ VOTING PHASE ===");
+        this.log("\n=== 🗳️ VOTING PHASE ===");
         const votes = new Map<string, number>();
         for (const p of players) {
             const rawVote = await controllers.get(p.id)!.vote(players, turns, p);
@@ -182,14 +193,14 @@ export class SpyfallGame {
             const voteName = parseField("VOTE", rawVote);
             const why = parseField("WHY", rawVote);
 
-            if (thought) console.log(`\n💭 ${p.name}'s Voting Logic: "${thought}"`);
+            if (thought) this.log(`\n💭 ${p.name}'s Voting Logic: "${thought}"`);
 
             const candidates = players.filter(x => x.id !== p.id);
             const validCandidate = candidates.find(x => normalizeName(x.name) === normalizeName(voteName));
             const finalVote = validCandidate?.name || safePickRandom(candidates, players[0]).name;
 
             votes.set(finalVote, (votes.get(finalVote) || 0) + 1);
-            console.log(`${p.name} voted for: ${finalVote} (${why})`);
+            this.log(`${p.name} voted for: ${finalVote} (${why})`);
         }
         return votes;
     }
@@ -203,8 +214,8 @@ export class SpyfallGame {
     }
 
     private logVerdict(accusedName: string | null, isTie: boolean, spy: Player): void {
-        console.log(`\n⚖️ VERDICT: ${isTie ? "A tie! The group is paralyzed by doubt." : `The group accuses ${accusedName}!`}`);
-        console.log(`🕵️ REVEAL: The Spy was indeed ${spy.name}!`);
+        this.log(`\n⚖️ VERDICT: ${isTie ? "A tie! The group is paralyzed by doubt." : `The group accuses ${accusedName}!`}`);
+        this.log(`🕵️ REVEAL: The Spy was indeed ${spy.name}!`);
     }
 
     private async runSpyGuessIfEligible(
@@ -217,13 +228,13 @@ export class SpyfallGame {
     ): Promise<boolean> {
         if (accusedName !== spy.name && !isTie) return false;
 
-        console.log(`\n${spy.name} attempts a final guess...`);
+        this.log(`\n${spy.name} attempts a final guess...`);
         const guessRaw = await controllers.get(spy.id)!.guessLocation(turns, spy) ?? "";
         const guess = parseField("GUESS", guessRaw);
         const reason = parseField("REASON", guessRaw);
 
-        console.log(`${spy.name}: "I believe we are at the ${guess.toUpperCase()}!"`);
-        if (reason) console.log(`Reason: "${reason}"`);
+        this.log(`${spy.name}: "I believe we are at the ${guess.toUpperCase()}!"`);
+        if (reason) this.log(`Reason: "${reason}"`);
 
         return normalizeName(guess) === normalizeName(pack.location);
     }
@@ -234,15 +245,15 @@ export class SpyfallGame {
         spy: Player,
         spyGuessedRight: boolean
     ): void {
-        console.log("\n" + "=".repeat(30));
-        console.log(`📍 ACTUAL LOCATION: ${pack.location}`);
+        this.log("\n" + "=".repeat(30));
+        this.log(`📍 ACTUAL LOCATION: ${pack.location}`);
         if (spyGuessedRight) {
-            console.log("🏆 RESULT: SPY WINS! (Correctly identified the location)");
+            this.log("🏆 RESULT: SPY WINS! (Correctly identified the location)");
         } else if (accusedName === spy.name) {
-            console.log("🏆 RESULT: CIVILIANS WIN! (Spy was caught)");
+            this.log("🏆 RESULT: CIVILIANS WIN! (Spy was caught)");
         } else {
-            console.log("🏆 RESULT: SPY WINS! (Total deception)");
+            this.log("🏆 RESULT: SPY WINS! (Total deception)");
         }
-        console.log("=".repeat(30) + "\n");
+        this.log("=".repeat(30) + "\n");
     }
 }
