@@ -156,23 +156,24 @@ export class SpyfallGame {
 
         while (roundCount < numRounds) {
             roundCount++;
+            this.log(`\n[Round ${roundCount}]`);
+
             const askerCtl = controllers.get(currentAsker.id)!;
             const rawAsk = await askerCtl.ask(players, currentAsker);
-
-            if (rawAsk.thought) this.log(`\n💭 ${currentAsker.name}'s Strategy: "${rawAsk.thought}"`);
+            if (rawAsk.thought) this.log(`💭 ${currentAsker.name}'s Strategy: "${rawAsk.thought}"`);
 
             const target = resolveOtherPlayer(players, rawAsk.targetName, currentAsker.id, lastAsker?.id);
+            this.log(`${currentAsker.name} ➔ ${target.name}`);
+            this.log(`Q: ${rawAsk.question}`);
+
             const targetCtl = controllers.get(target.id)!;
             const rawAnswer = await targetCtl.answer(currentAsker.name, rawAsk.question);
-
             const targetThought = parseField("THOUGHT", rawAnswer);
             const publicAnswer = parseField("ANSWER", rawAnswer) || rawAnswer;
             if (targetThought) this.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
+            this.log(`A: ${publicAnswer}`);
 
             turns.push({ askerId: currentAsker.name, targetId: target.name, question: rawAsk.question, answer: publicAnswer });
-            this.log(`\n[Round ${roundCount}] ${currentAsker.name} ➔ ${target.name}`);
-            this.log(`Q: ${rawAsk.question}`);
-            this.log(`A: ${publicAnswer}`);
 
             lastAsker = currentAsker;
             currentAsker = target;
