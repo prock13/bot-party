@@ -15,8 +15,8 @@ export class AIController implements PlayerController {
         };
     }
 
-    async answer(askerName: string, question: string): Promise<string> {
-        return await this.agent.say(buildAnswerInstruction(askerName, question), "answer a question");
+    async answer(askerName: string, question: string, self: Player): Promise<string> {
+        return await this.agent.say(buildAnswerInstruction(askerName, question, self.secret), "answer a question");
     }
 
     async guessLocation(turns: Turn[], self: Player): Promise<string | null> {
@@ -28,8 +28,8 @@ export class AIController implements PlayerController {
         return await this.agent.say(buildVotePrompt(players, turns, self.name), "vote");
     }
 
-    async react(eventType: "question" | "answer", authorName: string, content: string): Promise<ReactionResult> {
-        const raw = await this.agent.say(buildReactionPrompt(eventType, authorName, content), "react");
+    async react(eventType: "question" | "answer", authorName: string, content: string, self: Player): Promise<ReactionResult> {
+        const raw = await this.agent.say(buildReactionPrompt(eventType, authorName, content, self.secret), "react");
         return {
             emoji: parseField("EMOJI", raw) || "🤔",
             reaction: parseField("REACTION", raw) || raw,

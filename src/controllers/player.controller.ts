@@ -5,8 +5,8 @@ export type ReactionResult = { emoji: string; reaction: string; suspicion: strin
 
 export interface PlayerController {
     ask(players: Player[], self: Player): Promise<AskResult>;
-    answer(askerName: string, question: string): Promise<string>;
+    answer(askerName: string, question: string, self: Player): Promise<string>;
     guessLocation(turns: Turn[], self: Player): Promise<string | null>;
     vote(players: Player[], turns: Turn[], self: Player): Promise<string>;
-    react(eventType: "question" | "answer", authorName: string, content: string): Promise<ReactionResult>;
+    react(eventType: "question" | "answer", authorName: string, content: string, self: Player): Promise<ReactionResult>;
 }

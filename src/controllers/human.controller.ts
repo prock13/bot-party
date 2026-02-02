@@ -13,7 +13,7 @@ export class HumanController implements PlayerController {
         return { targetName, question };
     }
 
-    async answer(askerName: string, question: string): Promise<string> {
+    async answer(askerName: string, question: string, _self: Player): Promise<string> {
         console.log(`\n❓ ${askerName} asked you: ${question}`);
         return await this.rl.question(`Your answer: `);
     }
@@ -30,7 +30,7 @@ export class HumanController implements PlayerController {
         return `VOTE: ${vote}`;
     }
 
-    async react(_eventType: "question" | "answer", _authorName: string, _content: string): Promise<ReactionResult> {
+    async react(_eventType: "question" | "answer", _authorName: string, _content: string, _self: Player): Promise<ReactionResult> {
         // Humans don't auto-react; skip
         return { emoji: "", reaction: "", suspicion: "" };
     }

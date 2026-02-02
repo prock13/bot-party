@@ -227,7 +227,7 @@ export class SpyfallGame {
             await this.collectReactions(questionReactors, controllers, "question", currentAsker.name, rawAsk.question);
 
             const targetCtl = controllers.get(target.id)!;
-            const rawAnswer = await targetCtl.answer(currentAsker.name, rawAsk.question);
+            const rawAnswer = await targetCtl.answer(currentAsker.name, rawAsk.question, target);
             const targetThought = parseField("THOUGHT", rawAnswer);
             const publicAnswer = parseField("ANSWER", rawAnswer) || rawAnswer;
             if (targetThought) this.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
@@ -257,7 +257,7 @@ export class SpyfallGame {
         const reactions = await Promise.all(
             reactors.map(async (p) => {
                 const ctl = controllers.get(p.id)!;
-                const result = await ctl.react(eventType, authorName, content);
+                const result = await ctl.react(eventType, authorName, content, p);
                 return { name: p.name, ...result };
             })
         );
