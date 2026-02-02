@@ -1,6 +1,6 @@
 import readline from "node:readline/promises";
 import { Player, Turn } from "../types";
-import { PlayerController, AskResult } from "./player.controller";
+import { PlayerController, AskResult, ReactionResult } from "./player.controller";
 
 export class HumanController implements PlayerController {
     constructor(private rl: ReturnType<typeof readline.createInterface>) {}
@@ -28,5 +28,10 @@ export class HumanController implements PlayerController {
         const candidates = players.map(p => p.name).filter(n => n !== self.name);
         const vote = await this.rl.question(`\n🗳️ Vote for the SPY (${candidates.join(", ")}): `);
         return `VOTE: ${vote}`;
+    }
+
+    async react(_eventType: "question" | "answer", _authorName: string, _content: string): Promise<ReactionResult> {
+        // Humans don't auto-react; skip
+        return { emoji: "", reaction: "", suspicion: "" };
     }
 }

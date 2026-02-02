@@ -1,7 +1,7 @@
 import { Agent } from "../agent";
-import { buildAskerInstruction, parseField, buildAnswerInstruction, buildSpyGuessPrompt, buildVotePrompt } from "../prompts";
+import { buildAskerInstruction, parseField, buildAnswerInstruction, buildSpyGuessPrompt, buildVotePrompt, buildReactionPrompt } from "../prompts";
 import { Player, Turn } from "../types";
-import { PlayerController, AskResult } from "./player.controller";
+import { PlayerController, AskResult, ReactionResult } from "./player.controller";
 
 export class AIController implements PlayerController {
     constructor(private agent: Agent) {}
@@ -26,5 +26,14 @@ export class AIController implements PlayerController {
 
     async vote(players: Player[], turns: Turn[], self: Player): Promise<string> {
         return await this.agent.say(buildVotePrompt(players, turns, self.name), "vote");
+    }
+
+    async react(eventType: "question" | "answer", authorName: string, content: string): Promise<ReactionResult> {
+        const raw = await this.agent.say(buildReactionPrompt(eventType, authorName, content), "react");
+        return {
+            emoji: parseField("EMOJI", raw) || "🤔",
+            reaction: parseField("REACTION", raw) || raw,
+            suspicion: parseField("SUSPICION", raw) || "",
+        };
     }
 }

@@ -78,6 +78,27 @@ export function buildVotePrompt(players: Player[], turns: Turn[], selfName: stri
     ${recap}`;
 }
 
+export function buildReactionPrompt(
+    eventType: "question" | "answer",
+    authorName: string,
+    content: string
+): string {
+    const what = eventType === "question" ? "question" : "answer";
+    return `
+        ${authorName} just said this ${what}: "${content}"
+
+        React to it! Was it suspicious? Did it give too much away? Clever? Funny? Weak? Strong? 
+        Keep it SHORT and punchy (one sentence max).
+        Pick an emoji that captures your vibe.
+        Then explain how this shifts your suspicions or narrows down the location.
+
+        Return exactly in this format:
+            EMOJI: <single emoji with a facial expression>
+            REACTION: <your short reaction>
+            SUSPICION: <how this changes your read on who's the spy OR narrows down the location>
+    `;
+}
+
 /**
  * Extracts a specific value from a block of text based on a "KEY: VALUE" format.
  * 

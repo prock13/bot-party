@@ -2,7 +2,7 @@ import { openai, MODEL, type AgentMode } from "./openai";
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
-export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location";
+export type PromptType = "ask a question" | "answer a question" | "vote" | "guess the location" | "react";
 
 export type PromptEntry = {
     /** Unique ID to correlate sent/received events */

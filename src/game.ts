@@ -222,6 +222,10 @@ export class SpyfallGame {
             this.log(`${currentAsker.name} ➔ ${target.name}`);
             this.log(`Q: ${rawAsk.question}`);
 
+            // Reactions to the question (from players not involved)
+            const questionReactors = players.filter(p => p.id !== currentAsker.id && p.id !== target.id && !p.isHuman);
+            await this.collectReactions(questionReactors, controllers, "question", currentAsker.name, rawAsk.question);
+
             const targetCtl = controllers.get(target.id)!;
             const rawAnswer = await targetCtl.answer(currentAsker.name, rawAsk.question);
             const targetThought = parseField("THOUGHT", rawAnswer);
@@ -229,12 +233,42 @@ export class SpyfallGame {
             if (targetThought) this.log(`💭 ${target.name}'s Logic: "${targetThought}"`);
             this.log(`A: ${publicAnswer}`);
 
+            // Reactions to the answer (from players not involved)
+            const answerReactors = players.filter(p => p.id !== currentAsker.id && p.id !== target.id && !p.isHuman);
+            await this.collectReactions(answerReactors, controllers, "answer", target.name, publicAnswer);
+
             turns.push({ askerId: currentAsker.name, targetId: target.name, question: rawAsk.question, answer: publicAnswer });
 
             lastAsker = currentAsker;
             currentAsker = target;
         }
         return turns;
+    }
+
+    private async collectReactions(
+        reactors: Player[],
+        controllers: Map<PlayerId, PlayerController>,
+        eventType: "question" | "answer",
+        authorName: string,
+        content: string
+    ): Promise<void> {
+        if (reactors.length === 0) return;
+
+        const reactions = await Promise.all(
+            reactors.map(async (p) => {
+                const ctl = controllers.get(p.id)!;
+                const result = await ctl.react(eventType, authorName, content);
+                return { name: p.name, ...result };
+            })
+        );
+
+        const validReactions = reactions.filter(r => r.emoji && r.reaction);
+        if (validReactions.length > 0) {
+            for (const r of validReactions) {
+                this.log(`  ${r.emoji} ${r.name}: "${r.reaction}"`);
+                if (r.suspicion) this.log(`     ↳ ${r.suspicion}`);
+            }
+        }
     }
 
     private async runVotingPhase(
