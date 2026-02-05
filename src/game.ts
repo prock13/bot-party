@@ -7,76 +7,9 @@ import { EarlyEndResult, GameConfig, Player, PlayerId, PlayerSecret, PlayerSlotC
 import { buildPlayerSystemPrompt, secretToBrief } from "./prompts";
 import { DEFAULT_PROVIDER_ROTATION, getProviderDisplayName, type ProviderType } from "./providers";
 import { parseField } from "./utils/parseField";
-
-/** ---------- small utilities ---------- */
-
-function pickRandom<T>(arr: T[]): T {
-    return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function safePickRandom<T>(arr: T[], fallback: T): T {
-    return arr.length ? pickRandom(arr) : fallback;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-}
-
-function normalizeName(s: string): string {
-    return s.trim().toLowerCase();
-}
-
-/**
- * Resolve a target by name (name-based matching).
- * Enforces:
- * 1. Target is not the asker (selfId)
- * 2. Target is not the person who just asked (lastAskerId)
- *
- * Matching: exact normalized name first, then substring (target contains name or name contains target).
- * If multiple substring matches, prefer the longest name (most specific). Avoids "Gemini" matching wrong player.
- */
-function resolveTargetPlayer(
-    players: Player[],
-    targetName: string,
-    selfId: PlayerId,
-    lastAskerId?: PlayerId
-): Player {
-    const target = normalizeName(targetName);
-    const isIllegal = (p: Player) => p.id === selfId || (lastAskerId && p.id === lastAskerId);
-
-    // 1. Exact match (normalized)
-    const exact = players.find(p => normalizeName(p.name) === target && !isIllegal(p));
-    if (exact) return exact;
-
-    // 2. Substring match: target contains player name or player name contains target (e.g. "Gemini" -> "Gemini", or "Ask Gemini" -> "Gemini")
-    const candidates = players
-        .filter(p => !isIllegal(p))
-        .filter(p => {
-            const name = normalizeName(p.name);
-            return name && target && (target.includes(name) || name.includes(target));
-        });
-
-    if (candidates.length === 1) return candidates[0];
-    if (candidates.length > 1) {
-        // Prefer longest name (most specific match, e.g. "Gemini" over "Gemini 2" when target is "Gemini" - exact already failed so we have overlap)
-        candidates.sort((a, b) => normalizeName(b.name).length - normalizeName(a.name).length);
-        return candidates[0];
-    }
-
-    // 3. Fallback: random valid target
-    const validOptions = players.filter(p => !isIllegal(p));
-    if (validOptions.length === 0) {
-        return safePickRandom(players.filter(p => p.id !== selfId), players[0]);
-    }
-    return safePickRandom(validOptions, validOptions[0]);
-}
-
-/** ---------- Game Engine ---------- */
+import { normalizeName } from "./utils/normalizeName";
+import { pickRandom, safePickRandom, shuffle } from "./utils/random";
+import { resolveTargetPlayer } from "./utils/resolveTargetPlayer";
 
 type GameSetup = {
     pack: (typeof LOCATIONS)[number];
