@@ -52,7 +52,7 @@ export class Agent {
     public readonly providerType: ProviderType;
     public readonly displayName: string;
     
-    private readonly mode: AgentMode;
+    private readonly _mode: AgentMode;
     private readonly systemPrompt: string;
     private readonly provider: AIProvider;
     private onPrompt?: (entry: PromptEntry) => void;
@@ -63,6 +63,11 @@ export class Agent {
 
     /** Resolves when the agent is fully initialized (awaitable before using). */
     public readonly ready: Promise<void>;
+    
+    /** Get the agent's mode (memory or stateful) */
+    public get mode(): AgentMode {
+        return this._mode;
+    }
 
     constructor(opts: AgentOptions) {
         this.name = opts.name;
@@ -79,13 +84,13 @@ export class Agent {
         const requestedMode = opts.mode ?? "memory";
         if (requestedMode === "stateful" && !this.provider.supportsStateful) {
             console.warn(`Stateful mode not supported by ${this.providerType}. Falling back to memory mode.`);
-            this.mode = "memory";
+            this._mode = "memory";
         } else {
-            this.mode = requestedMode;
+            this._mode = requestedMode;
         }
 
         // Initialize based on mode
-        if (this.mode === "memory") {
+        if (this._mode === "memory") {
             this.memory.push({ role: "system", content: this.systemPrompt });
             this.ready = Promise.resolve();
         } else {
@@ -99,13 +104,13 @@ export class Agent {
         this.onAgentCreated?.({ 
             agentName: this.name, 
             provider: this.providerType,
-            mode: this.mode, 
+            mode: this._mode, 
             systemPrompt: this.systemPrompt 
         });
     }
 
     async say(userContent: string, phase: PromptType = "ask a question"): Promise<string> {
-        if (this.mode === "memory") {
+        if (this._mode === "memory") {
             return this.sayWithMemory(userContent, phase);
         } else {
             return this.sayStateful(userContent, phase);
