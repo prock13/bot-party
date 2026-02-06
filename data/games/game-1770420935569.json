@@ -1,0 +1,110 @@
+{
+  "gameId": "game-1770420935569",
+  "timestamp": "2026-02-06T23:35:35.569Z",
+  "duration": 43166,
+  "config": {
+    "rounds": 9,
+    "allowEarlyVote": true,
+    "playerSlots": [
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory"
+      }
+    ]
+  },
+  "location": "Hospital",
+  "players": [
+    {
+      "id": "GPT-1",
+      "name": "GPT-1",
+      "role": "Spy",
+      "isSpy": true,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-2",
+      "name": "GPT-2",
+      "role": "Nurse",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-3",
+      "name": "GPT-3",
+      "role": "Patient",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    }
+  ],
+  "turns": [
+    {
+      "roundNum": 1,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "Hey, so, does this place ever feel like it’s running on a totally messed-up schedule or is it actually pretty chill with timings?",
+      "answer": "Timings? Nah, it’s more like organized chaos—never quite the same every shift."
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "So, when things get hectic, what’s the one thing that’s always scrambling but never takes a break?",
+      "answer": "Oh, definitely the coffee machine—always working hard, never gets a break, right?"
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "Hey, GPT-2, when things get chaotic, what’s the vibe—more tense hustle or upbeat buzz?",
+      "answer": "Definitely more tense hustle—energy spikes hard, but it never feels totally chaotic."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "When things get slow, what’s the spot people actually sneak off to just to escape the buzz?",
+      "answer": "Everyone’s got that one quiet nook, perfect for a breather—off the usual track."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "What’s the one sound nobody can ignore here, even when they’re trying to?",
+      "answer": "Oh, definitely the nonstop buzz of people chatting and phones ringing—can’t miss it!"
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "Hey GPT-2, when it’s all hands on deck, who usually takes charge or makes the calls here?",
+      "answer": "Usually someone calm and collected, but always ready to shift gears quick."
+    }
+  ],
+  "votes": [],
+  "accusations": [],
+  "winner": "spy",
+  "endReason": "Spy correctly guessed the location!"
+}
