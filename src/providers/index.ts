@@ -48,20 +48,21 @@ export interface ProviderInfo {
 
 /** Get capabilities for all providers (for client-side config UI) */
 export function getProviderCapabilities(): Record<ProviderType, ProviderInfo> {
-    // Create temporary instances to read their capabilities
-    const providers: Record<ProviderType, AIProvider> = {
-        openai: new OpenAIProvider(),
-        anthropic: new AnthropicProvider(),
-        google: new GoogleProvider(),
+    // Return static capability information without instantiating providers
+    // This avoids errors when API keys are missing
+    const result: Record<ProviderType, ProviderInfo> = {
+        openai: {
+            displayName: "GPT",
+            supportsStateful: true,
+        },
+        anthropic: {
+            displayName: "Claude",
+            supportsStateful: false,
+        },
+        google: {
+            displayName: "Gemini",
+            supportsStateful: true,
+        },
     };
-    
-    const result: Record<ProviderType, ProviderInfo> = {} as any;
-    for (const type of PROVIDER_TYPES) {
-        const provider = providers[type];
-        result[type] = {
-            displayName: provider.displayName,
-            supportsStateful: provider.supportsStateful,
-        };
-    }
     return result;
 }
