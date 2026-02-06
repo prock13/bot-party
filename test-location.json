@@ -1,0 +1,12 @@
+{
+  "name": "Test Hackathon",
+  "roles": [
+    "Project Manager",
+    "Frontend Developer",
+    "Backend Developer",
+    "UI/UX Designer",
+    "DevOps Engineer",
+    "QA Tester",
+    "Product Owner"
+  ]
+}

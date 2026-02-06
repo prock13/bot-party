@@ -1,0 +1,166 @@
+{
+  "gameId": "game-1770415156479",
+  "timestamp": "2026-02-06T21:59:16.479Z",
+  "duration": 64563,
+  "config": {
+    "rounds": 9,
+    "allowEarlyVote": true,
+    "playerSlots": [
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory"
+      },
+      {
+        "type": "openai",
+        "mode": "memory"
+      }
+    ]
+  },
+  "location": "Day Spa",
+  "players": [
+    {
+      "id": "GPT-1",
+      "name": "GPT-1",
+      "role": "Spy",
+      "isSpy": true,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-2",
+      "name": "GPT-2",
+      "role": "Masseur",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-3",
+      "name": "GPT-3",
+      "role": "Beautician",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    },
+    {
+      "id": "GPT-4",
+      "name": "GPT-4",
+      "role": "Customer",
+      "isSpy": false,
+      "provider": "openai",
+      "mode": "memory"
+    }
+  ],
+  "turns": [
+    {
+      "roundNum": 1,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "Hey, GPT-3, what’s the vibe with the background noise around here? Is it more like nature sounds or something else?",
+      "answer": "It’s more of a mellow hum—you know, the kind that eases you right in."
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-4",
+      "targetId": "GPT-4",
+      "question": "Hey, GPT-2, what’s the usual go-to when someone’s here for a quick pick-me-up?",
+      "answer": "Usually something quick to boost the mood without breaking the mellow flow here."
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-4",
+      "askerId": "GPT-4",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "Hey, GPT-2, what’s the vibe shift like when things go from quiet to a bit more lively around here?",
+      "answer": "Quiet shifts to cozy buzz, like everyone’s syncing up for a soft recharge moment."
+    },
+    {
+      "roundNum": 1,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "GPT-1, what’s your take on the lighting here—more about setting a mood or keeping things ultra-bright?",
+      "answer": "Lighting’s got that vibe where you squint, think, \"Am I supposed to relax or party?”"
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-4",
+      "targetId": "GPT-4",
+      "question": "Hey GPT-2, when folks get together here, is it more about quiet convos or full-on group energy?",
+      "answer": "It’s mostly chill gatherings, but every now and then the energy bubbles up real quick."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-4",
+      "askerId": "GPT-4",
+      "target": "GPT-2",
+      "targetId": "GPT-2",
+      "question": "GPT-2, what’s the low-key ritual that signals it’s time to really chill here?",
+      "answer": "When chatter softens and the deep breathing starts, that’s the cue to sink in."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-2",
+      "askerId": "GPT-2",
+      "target": "GPT-1",
+      "targetId": "GPT-1",
+      "question": "GPT-1, is the scent here more about calming you or awakening your senses—what’s the energy?",
+      "answer": "Scent’s like a mystery playlist—sometimes chill, sometimes wakes you up just right."
+    },
+    {
+      "roundNum": 2,
+      "asker": "GPT-1",
+      "askerId": "GPT-1",
+      "target": "GPT-3",
+      "targetId": "GPT-3",
+      "question": "Hey GPT-3, would you say leaving here feels more like a gentle wake-up call or a full-on energy boost?",
+      "answer": "It’s more like a smooth reset, not blasting you but easing the switch."
+    },
+    {
+      "roundNum": 3,
+      "asker": "GPT-3",
+      "askerId": "GPT-3",
+      "target": "GPT-4",
+      "targetId": "GPT-4",
+      "question": "What’s the subtle sign that someone’s gone from chill mode to full spa zen here?",
+      "answer": "You just know it when the vibe shifts; like the whole room softens up."
+    }
+  ],
+  "votes": [
+    {
+      "voter": "collective",
+      "votedFor": "GPT-3",
+      "voteCount": 1
+    },
+    {
+      "voter": "collective",
+      "votedFor": "GPT-1",
+      "voteCount": 2
+    },
+    {
+      "voter": "collective",
+      "votedFor": "GPT-2",
+      "voteCount": 1
+    }
+  ],
+  "accusations": [],
+  "winner": "spy",
+  "endReason": "Spy caught but guessed location correctly",
+  "spyGuessedCorrectly": true
+}
