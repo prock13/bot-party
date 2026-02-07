@@ -18,6 +18,7 @@ In Spyfall, players are assigned roles at a secret location. One player is the s
 ### Key Features
 
 - **Multi-Provider AI Support**: Use OpenAI GPT, Anthropic Claude, or Google Gemini
+- **Visual Game Board**: Real-time circular player layout with speech bubbles, animations, and playback controls
 - **AI Personalities**: 7 distinct personality types (Aggressive, Quiet, Paranoid, Comedic, Analytical, Social, Neutral)
 - **Memory Modes**: Stateful (server-side history) or memory (client-side history) AI agents
 - **Configurable Reactions**: Control AI reaction frequency (always, frequent, sometimes, rare, never)
@@ -109,6 +110,21 @@ Each AI agent can have a distinct personality affecting their:
 - **Decision-making**: How they make accusations (bold vs cautious)
 
 Mix and match personalities for unique gameplay dynamics! See [FEATURES.md](docs/FEATURES.md) for detailed personality descriptions.
+
+### 🎨 Visual Game Board
+
+Real-time visual representation of the game with:
+
+- **Player Cards**: Circular layout showing all players with avatars and status
+- **Speech Bubbles**: Questions and answers appear near the speaking player
+- **Turn Indicators**: Visual highlighting of the current asker and target
+- **Round Tracking**: Live round counter showing progress through the game
+- **Voting Visualization**: Vote counts displayed on player cards
+- **Spy Reveal**: Dramatic reveal animation at game end
+- **Result Display**: Winner announcement with icons and styling
+- **Playback Controls**: Adjust visualization speed (0.5x to 4x) or pause
+
+Toggle between the classic log view and visual board using the view selector in the game panel.
 
 ### 📊 Analytics Dashboard
 
