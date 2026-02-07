@@ -721,6 +721,147 @@ es.onerror = () => {
 
 // ==================== Visual Game Board ====================
 
+// Audio Manager for Text-to-Speech
+class AudioManager {
+	constructor() {
+		this.synth = window.speechSynthesis;
+		this.audioQueue = [];
+		this.speaking = false;
+		this.enabled = false;
+		this.volume = 0.8;
+		this.voiceMap = new Map(); // player name -> voice
+		this.availableVoices = [];
+		this.rate = 1.0;
+		
+		// Wait for voices to load
+		if (this.synth) {
+			this.synth.onvoiceschanged = () => {
+				this.availableVoices = this.synth.getVoices();
+				this.assignDefaultVoices();
+			};
+			
+			// Try to get voices immediately (some browsers load synchronously)
+			this.availableVoices = this.synth.getVoices();
+			if (this.availableVoices.length > 0) {
+				this.assignDefaultVoices();
+			}
+		}
+	}
+	
+	assignDefaultVoices() {
+		// Clear existing assignments
+		this.voiceMap.clear();
+		
+		// Filter for English voices
+		const englishVoices = this.availableVoices.filter(v => 
+			v.lang.startsWith('en-')
+		);
+		
+		if (englishVoices.length === 0) {
+			console.warn('No English voices available');
+			return;
+		}
+		
+		// Assign voices to players as they're added
+		// This will be called when players are set up
+	}
+	
+	assignVoiceToPlayer(playerName, voiceIndex = null) {
+		if (this.availableVoices.length === 0) return;
+		
+		const englishVoices = this.availableVoices.filter(v => 
+			v.lang.startsWith('en-')
+		);
+		
+		if (englishVoices.length === 0) return;
+		
+		let voice;
+		if (voiceIndex !== null && englishVoices[voiceIndex]) {
+			voice = englishVoices[voiceIndex];
+		} else {
+			// Assign different voice based on player index
+			const playerCount = this.voiceMap.size;
+			voice = englishVoices[playerCount % englishVoices.length];
+		}
+		
+		this.voiceMap.set(playerName, voice);
+	}
+	
+	setEnabled(enabled) {
+		this.enabled = enabled;
+		if (!enabled) {
+			this.stop();
+		}
+	}
+	
+	setVolume(volume) {
+		this.volume = Math.max(0, Math.min(1, volume));
+	}
+	
+	setRate(rate) {
+		this.rate = rate;
+	}
+	
+	speak(text, playerName) {
+		if (!this.enabled || !this.synth || !text) return;
+		
+		// Add to queue
+		this.audioQueue.push({ text, playerName });
+		
+		// Process queue if not already speaking
+		if (!this.speaking) {
+			this.processQueue();
+		}
+	}
+	
+	async processQueue() {
+		if (this.speaking || this.audioQueue.length === 0) return;
+		
+		this.speaking = true;
+		const { text, playerName } = this.audioQueue.shift();
+		
+		const utterance = new SpeechSynthesisUtterance(text);
+		utterance.volume = this.volume;
+		utterance.rate = this.rate;
+		
+		// Assign voice if available
+		const voice = this.voiceMap.get(playerName);
+		if (voice) {
+			utterance.voice = voice;
+		}
+		
+		utterance.onend = () => {
+			this.speaking = false;
+			// Process next in queue
+			if (this.audioQueue.length > 0) {
+				setTimeout(() => this.processQueue(), 100);
+			}
+		};
+		
+		utterance.onerror = () => {
+			this.speaking = false;
+			// Continue with queue on error
+			if (this.audioQueue.length > 0) {
+				setTimeout(() => this.processQueue(), 100);
+			}
+		};
+		
+		this.synth.speak(utterance);
+	}
+	
+	stop() {
+		if (this.synth) {
+			this.synth.cancel();
+			this.audioQueue = [];
+			this.speaking = false;
+		}
+	}
+	
+	getAvailableVoices() {
+		return this.availableVoices.filter(v => v.lang.startsWith('en-'));
+	}
+}
+
 // Game State Manager
 class GameStateManager {
 	constructor() {
@@ -921,8 +1062,9 @@ class GameStateManager {
 
 // Visual Board Renderer
 class VisualBoardRenderer {
-	constructor(stateManager) {
+	constructor(stateManager, audioManager) {
 		this.state = stateManager;
+		this.audio = audioManager;
 		this.playerRing = document.getElementById('playerRing');
 		this.turnArrow = document.getElementById('turnArrow');
 		this.arrowLine = document.getElementById('arrowLine');
@@ -945,6 +1087,13 @@ class VisualBoardRenderer {
 		this.renderPlayers();
 		this.updateGameStatus();
 		this.dialogDisplay.innerHTML = '';
+		
+		// Assign voices to players
+		if (this.audio) {
+			this.state.players.forEach(player => {
+				this.audio.assignVoiceToPlayer(player.name);
+			});
+		}
 	}
 
 	renderPlayers() {
@@ -1183,6 +1332,11 @@ class VisualBoardRenderer {
 		this.dialogDisplay.appendChild(bubble);
 		this.currentBubbles.push(bubble);
 		
+		// Speak the question
+		if (this.audio && askerPlayer) {
+			this.audio.speak(text, askerPlayer.name);
+		}
+		
 		// Position after DOM insertion so we can measure
 		setTimeout(() => {
 			this.positionBubbleNearPlayer(bubble, askerCard);
@@ -1214,6 +1368,11 @@ class VisualBoardRenderer {
 		
 		// Remove thinking state from target
 		targetCard.classList.remove('thinking');
+		
+		// Speak the answer
+		if (this.audio && targetPlayer) {
+			this.audio.speak(text, targetPlayer.name);
+		}
 		
 		// Position after DOM insertion so we can measure
 		setTimeout(() => {
@@ -1374,7 +1533,8 @@ class VisualBoardRenderer {
 
 // Global instances
 const gameState = new GameStateManager();
-const visualBoardRenderer = new VisualBoardRenderer(gameState);
+const audioManager = new AudioManager();
+const visualBoardRenderer = new VisualBoardRenderer(gameState, audioManager);
 
 // View toggle handlers
 const visualViewBtn = document.getElementById('visualViewBtn');
@@ -1407,6 +1567,8 @@ if (pauseBtn) {
 			pauseBtn.textContent = '▶️';
 			pauseBtn.classList.add('paused');
 			pauseBtn.title = 'Resume';
+			// Stop audio when paused
+			audioManager.stop();
 		} else {
 			pauseBtn.textContent = '⏸️';
 			pauseBtn.classList.remove('paused');
@@ -1422,11 +1584,42 @@ speedButtons.forEach(btn => {
 		const speed = parseFloat(btn.dataset.speed);
 		gameState.setSpeed(speed);
 		
+		// Update audio rate to match visualization speed
+		audioManager.setRate(speed);
+		
 		// Update active state
 		speedButtons.forEach(b => b.classList.remove('active'));
 		btn.classList.add('active');
 	});
 });
+
+// Audio controls
+const audioToggleBtn = document.getElementById('audioToggleBtn');
+const volumeSlider = document.getElementById('volumeSlider');
+
+if (audioToggleBtn) {
+	audioToggleBtn.addEventListener('click', () => {
+		const enabled = !audioManager.enabled;
+		audioManager.setEnabled(enabled);
+		
+		if (enabled) {
+			audioToggleBtn.textContent = '🔊';
+			audioToggleBtn.title = 'Disable Voice';
+			audioToggleBtn.classList.add('active');
+		} else {
+			audioToggleBtn.textContent = '🔇';
+			audioToggleBtn.title = 'Enable Voice';
+			audioToggleBtn.classList.remove('active');
+		}
+	});
+}
+
+if (volumeSlider) {
+	volumeSlider.addEventListener('input', (e) => {
+		const volume = parseInt(e.target.value) / 100;
+		audioManager.setVolume(volume);
+	});
+}
 
 // Start game
 startBtn.addEventListener("click", async () => {
