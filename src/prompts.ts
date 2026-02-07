@@ -1,4 +1,4 @@
-import { allLocationsList } from "./data";
+import { allLocationsList, type LocationPack } from "./data";
 import { Player, PlayerSecret, Turn } from "./types";
 import { Personality, NEUTRAL_PERSONALITY, applyPersonalityToPrompt } from "./personalities";
 
@@ -7,7 +7,12 @@ export function secretToBrief(secret: PlayerSecret): string {
     return `📍 Location: ${secret.location}\n👤 Your role: ${secret.role}`;
 }
 
-export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret, personality: Personality = NEUTRAL_PERSONALITY): string {
+export function buildPlayerSystemPrompt(
+    name: string, 
+    secret: PlayerSecret, 
+    personality: Personality = NEUTRAL_PERSONALITY,
+    locationPack?: LocationPack
+): string {
     const baseRules = `You are playing Spyfall. STOP acting like a boring chat agent. Act like a person playing a party game with personality and/or attitude.
         STYLE:
         - NO CORPORATE SPEAK. Be super casual. Talk like high school or college students playing a party game.
@@ -34,10 +39,15 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret, pers
         `;
         return applyPersonalityToPrompt(spyPrompt, personality);
     } else {
+        // Get role hints for civilians
+        const roleHints = locationPack ? 
+            `\n        💡 OTHER ROLES AT ${secret.location}: ${locationPack.roles.filter(r => r !== secret.role).slice(0, 4).join(", ")}...`
+            : "";
+        
         const civilianPrompt = `${baseRules}
 
         📍 LOCATION: ${secret.location}
-        👤 YOUR ROLE: ${secret.role}
+        👤 YOUR ROLE: ${secret.role}${roleHints}
 
         CIVILIAN STRATEGY:
         - You KNOW the location. The spy does NOT.
@@ -52,7 +62,6 @@ export function buildPlayerSystemPrompt(name: string, secret: PlayerSecret, pers
         `;
         return applyPersonalityToPrompt(civilianPrompt, personality);
     }
-}
 
 export function buildAskerInstruction(players: Player[], self: Player): string {
     const names = players.map(p => p.name).filter(n => n !== self.name).join(", ");

@@ -95,7 +95,7 @@ export async function setupGame(config: GameConfig, deps: SetupDeps): Promise<Ga
             const personality = getPersonalityById(aiSlot.personality || "neutral");
             const agent = new Agent({
                 name: p.name,
-                systemPrompt: buildPlayerSystemPrompt(p.name, p.secret, personality),
+                systemPrompt: buildPlayerSystemPrompt(p.name, p.secret, personality, pack),
                 provider: aiSlot.type,
                 mode: aiSlot.mode,
                 onPrompt: deps.onPrompt,

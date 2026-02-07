@@ -38,8 +38,21 @@ export const LOCATIONS: LocationPack[] = [
 
 export type Location = typeof LOCATIONS[number]["location"];
 
+/** Location categories for better organization */
+export const LOCATION_CATEGORIES = {
+    "Travel & Transport": ["Airplane", "Ocean Liner", "Passenger Train", "Pirate Ship", "Submarine", "Space Station"],
+    "Entertainment & Leisure": ["Amusement Park", "Beach", "Carnival", "Casino", "Circus Tent", "Day Spa", "Movie Studio", "Night Club", "Restaurant", "Theatre", "Zoo"],
+    "Work & Business": ["Bank", "Corporate Party", "Hotel", "Service Station", "Supermarket", "University"],
+    "Public Services": ["Embassy", "Hospital", "Military Base", "Police Station", "School"],
+    "Special": ["Crusader Army", "Polar Station"],
+};
+
 export function allLocationsList(): string {
-  return LOCATIONS.map(l => l.location).join(", ");
+    // Group locations by category for better readability
+    const categorized = Object.entries(LOCATION_CATEGORIES)
+        .map(([category, locs]) => `${category}: ${locs.join(", ")}`)
+        .join("\n        ");
+    return categorized;
 }
 
 export function getRandomLocationPack(): LocationPack {
