@@ -6,12 +6,20 @@ import type { PromptEntry, AgentCreatedEntry } from "./agent";
 import { SpyfallGame, type GameInfoEntry } from "./game";
 import type { GameConfig, PlayerSlotConfig } from "./types";
 import { PROVIDER_TYPES, type ProviderType, getProviderCapabilities } from "./providers";
+import { AnalyticsService } from "./analytics";
+import { LocationManager } from "./locations";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 
 /** SSE clients: each can receive broadcast payloads (full SSE message). */
 const sseClients: Set<(payload: string) => void> = new Set();
+
+/** Shared analytics service instance */
+const analytics = new AnalyticsService();
+
+/** Shared location manager instance */
+const locationManager = new LocationManager();
 
 function broadcast(line: string): void {
     const payload = `event: log\ndata: ${JSON.stringify({ line })}\n\n`;
@@ -76,6 +84,20 @@ function handleStream(res: ServerResponse): void {
     });
 }
 
+/**
+ * Helper to read request body
+ */
+function readRequestBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+        let body = "";
+        req.on("data", chunk => {
+            body += chunk.toString();
+        });
+        req.on("end", () => resolve(body));
+        req.on("error", reject);
+    });
+}
+
 async function handleStart(res: ServerResponse, queryString: string): Promise<void> {
     const params = new URLSearchParams(queryString);
     
@@ -111,10 +133,14 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
 
     // Parse allowEarlyVote option (default: true)
     const allowEarlyVote = params.get("allowEarlyVote") !== "false";
+    
+    // Parse locationName option (if provided)
+    const locationName = params.get("location") || undefined;
 
     const config: GameConfig = {
         rounds,
         allowEarlyVote,
+        locationName,
         playerSlots,
     };
 
@@ -176,7 +202,7 @@ function serveStatic(res: ServerResponse, filePath: string): boolean {
     }
 }
 
-const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = req.url ?? "/";
     const [path, queryString] = url.split("?");
 
@@ -191,6 +217,71 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     }
     if (path === "/api/start" && req.method === "POST") {
         void handleStart(res, queryString ?? "");
+        return;
+    }
+    // Analytics endpoints
+    if (path === "/api/analytics/summary" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        const summary = analytics.generateSummary();
+        res.end(JSON.stringify(summary));
+        return;
+    }
+    if (path === "/api/analytics/games" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        const games = analytics.loadAllGames();
+        res.end(JSON.stringify(games));
+        return;
+    }
+    if (path.startsWith("/api/analytics/games/") && req.method === "GET") {
+        const gameId = path.substring("/api/analytics/games/".length);
+        const game = analytics.loadGame(gameId);
+        if (game) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(game));
+        } else {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Game not found" }));
+        }
+        return;
+    }
+    // Location endpoints
+    if (path === "/api/locations" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        const locations = locationManager.getAll();
+        res.end(JSON.stringify(locations));
+        return;
+    }
+    if (path === "/api/locations/import" && req.method === "POST") {
+        try {
+            const body = await readRequestBody(req);
+            const imported = JSON.parse(body);
+            
+            if (Array.isArray(imported)) {
+                locationManager.addCustomBatch(imported);
+            } else {
+                locationManager.addCustom(imported);
+            }
+            
+            const count = locationManager.getCount();
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ success: true, count }));
+        } catch (err) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Invalid location data" }));
+        }
+        return;
+    }
+    if (path === "/api/locations/export" && req.method === "GET") {
+        res.writeHead(200, { 
+            "Content-Type": "application/json",
+            "Content-Disposition": "attachment; filename=locations.json"
+        });
+        res.end(locationManager.exportAll());
+        return;
+    }
+    if (path === "/api/locations/count" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(locationManager.getCount()));
         return;
     }
     // Serve static files from public/

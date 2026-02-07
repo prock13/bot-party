@@ -47,6 +47,8 @@ export type GameConfig = {
     rounds: number; // number of Q/A turns (not "full cycles")
     /** Allow players to call early votes (once per game). Default: true */
     allowEarlyVote?: boolean;
+    /** Specific location to use (by name). If not provided, picks random. */
+    locationName?: string;
     /** Player configurations in order. If not provided, uses legacy config. */
     playerSlots?: PlayerSlotConfig[];
     // Legacy config (used if playerSlots not provided)

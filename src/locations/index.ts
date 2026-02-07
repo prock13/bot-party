@@ -1,0 +1,1 @@
+export { LocationManager } from "./manager";

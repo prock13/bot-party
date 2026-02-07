@@ -32,7 +32,20 @@ export function legacyConfigToSlots(config: GameConfig): PlayerSlotConfig[] {
 export async function setupGame(config: GameConfig, deps: SetupDeps): Promise<GameSetup> {
     const slots: PlayerSlotConfig[] = config.playerSlots ?? legacyConfigToSlots(config);
 
-    const pack = pickRandom(LOCATIONS);
+    // Select location: use specified location if provided, otherwise pick random
+    let pack;
+    if (config.locationName) {
+        const found = LOCATIONS.find(loc => 
+            loc.location.toLowerCase() === config.locationName!.toLowerCase()
+        );
+        if (!found) {
+            throw new Error(`Location "${config.locationName}" not found`);
+        }
+        pack = found;
+    } else {
+        pack = pickRandom(LOCATIONS);
+    }
+    
     const numPlayers = slots.length;
     const spyIndex = Math.floor(Math.random() * numPlayers);
     const roles = shuffle(pack.roles).slice(0, numPlayers - 1);

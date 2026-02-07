@@ -12,6 +12,11 @@ const allowEarlyVoteInput = document.getElementById("allowEarlyVote");
 const playerList = document.getElementById("playerList");
 const addPlayerBtn = document.getElementById("addPlayerBtn");
 const playerCountEl = document.getElementById("playerCount");
+const locationSelect = document.getElementById("locationSelect");
+const locationFileInput = document.getElementById("locationFileInput");
+const importLocationBtn = document.getElementById("importLocationBtn");
+const exportLocationBtn = document.getElementById("exportLocationBtn");
+const locationCountEl = document.getElementById("locationCount");
 
 // Provider capabilities (fetched from server)
 let providerInfo = {
@@ -150,6 +155,101 @@ addPlayerBtn.addEventListener("click", () => {
 // Initialize player list
 renderPlayers();
 loadProviderInfo(); // Fetch actual provider capabilities from server
+loadLocations(); // Load available locations
+
+// Location management
+async function loadLocations() {
+	try {
+		const res = await fetch("/api/locations");
+		if (res.ok) {
+			const locations = await res.json();
+			populateLocationSelect(locations);
+			updateLocationCount();
+		}
+	} catch (e) {
+		console.warn("Failed to load locations", e);
+	}
+}
+
+function populateLocationSelect(locations) {
+	// Keep the "Random" option
+	while (locationSelect.options.length > 1) {
+		locationSelect.remove(1);
+	}
+	
+	locations.forEach(loc => {
+		const opt = document.createElement("option");
+		opt.value = loc.location;
+		opt.textContent = loc.location;
+		locationSelect.appendChild(opt);
+	});
+}
+
+async function updateLocationCount() {
+	try {
+		const res = await fetch("/api/locations/count");
+		if (res.ok) {
+			const count = await res.json();
+			locationCountEl.textContent = `${count.total} location${count.total !== 1 ? 's' : ''}`;
+			if (count.custom > 0) {
+				locationCountEl.textContent += ` (${count.custom} custom)`;
+			}
+		}
+	} catch (e) {
+		console.warn("Failed to get location count", e);
+	}
+}
+
+importLocationBtn.addEventListener("click", () => {
+	locationFileInput.click();
+});
+
+locationFileInput.addEventListener("change", async (e) => {
+	const file = e.target.files[0];
+	if (!file) return;
+	
+	try {
+		const text = await file.text();
+		const res = await fetch("/api/locations/import", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: text
+		});
+		
+		if (res.ok) {
+			const result = await res.json();
+			await loadLocations();
+			alert(`Successfully imported locations! Total: ${result.count.total}`);
+		} else {
+			const error = await res.json();
+			alert(`Import failed: ${error.error}`);
+		}
+	} catch (e) {
+		alert(`Import failed: ${e.message}`);
+	}
+	
+	// Reset file input
+	locationFileInput.value = "";
+});
+
+exportLocationBtn.addEventListener("click", async () => {
+	try {
+		const res = await fetch("/api/locations/export");
+		if (res.ok) {
+			const blob = await res.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = "locations.json";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		}
+	} catch (e) {
+		alert(`Export failed: ${e.message}`);
+	}
+});
 
 // Analytics functions
 async function loadAnalytics() {
@@ -547,16 +647,25 @@ startBtn.addEventListener("click", async () => {
 	try {
 		const rounds = parseInt(roundsInput.value) || 9;
 		const allowEarlyVote = allowEarlyVoteInput?.checked ?? true;
+		const selectedLocation = locationSelect.value;
+		
 		// Encode players as "type:mode" pairs (human has no mode)
 		const playersParam = players.map(p =>
 			p.type === "human" ? "human" : `${p.type}:${p.mode}`
 		).join(",");
 
-		const url = "/api/start?" + new URLSearchParams({
+		const params = {
 			rounds: rounds.toString(),
 			players: playersParam,
 			allowEarlyVote: allowEarlyVote.toString(),
-		});
+		};
+		
+		// Add location if not random
+		if (selectedLocation) {
+			params.location = selectedLocation;
+		}
+
+		const url = "/api/start?" + new URLSearchParams(params);
 
 		const r = await fetch(url, { method: "POST" });
 		if (!r.ok) throw new Error(await r.text());

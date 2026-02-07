@@ -410,6 +410,73 @@ h1 {
 	}
 }
 
+/* Location Controls */
+.location-controls {
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.location-controls h4 {
+	margin: 0 0 0.75rem 0;
+	font-size: 0.75rem;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.location-controls select {
+	width: 100%;
+	font: inherit;
+	font-size: 0.875rem;
+	padding: 0.5rem;
+	background: var(--surface);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	margin-bottom: 0.75rem;
+}
+
+.location-controls select:hover {
+	border-color: var(--accent);
+}
+
+.location-btns {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.location-btns .secondary-btn {
+	flex: 1;
+}
+
+.secondary-btn {
+	padding: 0.5rem 0.75rem;
+	background: transparent;
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.8rem;
+	transition: all 0.15s ease;
+}
+
+.secondary-btn:hover {
+	background: var(--surface-hover);
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.location-count {
+	font-size: 0.75rem;
+	color: var(--muted);
+	text-align: center;
+}
+
 /* Analytics Panel */
 #analyticsPanel {
 	flex: 1;
