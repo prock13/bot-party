@@ -66,4 +66,11 @@ typings/
 
 dist/
 
+# Game data files (runtime generated)
+data/*
+!data/.gitkeep
+!data/games/
+data/games/*
+!data/games/.gitkeep
+
 .DS_Store

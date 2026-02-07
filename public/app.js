@@ -67,9 +67,53 @@ async function loadProviderInfo() {
 	}
 }
 
+// Update the provider status banner
+function updateProviderStatusBanner() {
+	const banner = document.getElementById('providerStatusBanner');
+	if (!banner) return;
+
+	const configured = [];
+	const missing = [];
+	
+	for (const [type, info] of Object.entries(providerInfo)) {
+		if (type === 'human') continue;
+		if (info.configured) {
+			configured.push(info.displayName);
+		} else {
+			missing.push(info.displayName);
+		}
+	}
+
+	if (missing.length > 0) {
+		banner.style.display = 'block';
+		banner.className = 'provider-status-banner warning';
+		banner.innerHTML = `
+			<span class="banner-icon">⚠️</span>
+			<span class="banner-text">
+				<strong>Missing API Keys:</strong> ${missing.join(', ')}
+				${configured.length > 0 ? `<span class="banner-subtext">Available: ${configured.join(', ')}</span>` : ''}
+			</span>
+		`;
+	} else if (configured.length > 0) {
+		banner.style.display = 'block';
+		banner.className = 'provider-status-banner success';
+		banner.innerHTML = `
+			<span class="banner-icon">✓</span>
+			<span class="banner-text">All providers configured: ${configured.join(', ')}</span>
+		`;
+	} else {
+		banner.style.display = 'none';
+	}
+}
+
 // Check if a provider type supports stateful mode
 function supportsStateful(type) {
 	return providerInfo[type]?.supportsStateful ?? false;
+}
+
+// Check if a provider has an API key configured
+function isProviderConfigured(type) {
+	return providerInfo[type]?.configured ?? false;
 }
 
 function renderPlayers() {
@@ -89,18 +133,32 @@ function renderPlayers() {
 		getPlayerTypes().forEach(pt => {
 			const opt = document.createElement("option");
 			opt.value = pt.value;
-			opt.textContent = pt.label;
+			// Mark unconfigured providers
+			if (pt.value !== 'human' && !isProviderConfigured(pt.value)) {
+				opt.textContent = pt.label + ' (No API Key)';
+				opt.disabled = true;
+				opt.style.color = '#666';
+			} else {
+				opt.textContent = pt.label;
+			}
 			if (pt.value === player.type) opt.selected = true;
 			typeSelect.appendChild(opt);
 		});
 		typeSelect.addEventListener("change", (e) => {
-			players[index].type = e.target.value;
+			const newType = e.target.value;
+			// Prevent selection of unconfigured providers
+			if (newType !== 'human' && !isProviderConfigured(newType)) {
+				alert(`Cannot select ${providerInfo[newType]?.displayName || newType}: API key not configured. Please add the API key to your .env file.`);
+				e.target.value = player.type; // Revert to previous selection
+				return;
+			}
+			players[index].type = newType;
 			// Reset mode to memory if switching to a type that doesn't support stateful
-			if (!supportsStateful(e.target.value)) {
+			if (!supportsStateful(newType)) {
 				players[index].mode = "memory";
 			}
 			// Reset personality to neutral when switching to human
-			if (e.target.value === "human") {
+			if (newType === "human") {
 				players[index].personality = undefined;
 			} else if (!players[index].personality) {
 				players[index].personality = "neutral";
@@ -180,8 +238,12 @@ addPlayerBtn.addEventListener("click", () => {
 		alert("Maximum 8 players.");
 		return;
 	}
-	// Cycle through AI providers for new players
-	const aiTypes = ["openai", "anthropic", "google"];
+	// Cycle through AI providers for new players, skip unconfigured ones
+	const aiTypes = ["openai", "anthropic", "google"].filter(type => isProviderConfigured(type));
+	if (aiTypes.length === 0) {
+		alert("No AI providers configured. Please add API keys to your .env file.");
+		return;
+	}
 	const aiCount = players.filter(p => p.type !== "human").length;
 	const nextType = aiTypes[aiCount % aiTypes.length];
 	players.push({ type: nextType, mode: "memory", personality: "neutral" });
@@ -547,6 +609,14 @@ function handleLine(line) {
 	const title = sectionTitleFor(line);
 	if (title) startSection(title, line);
 	else appendLine(line);
+	
+	// Queue event for visual board (with delay)
+	if (typeof gameState !== 'undefined' && typeof visualBoardRenderer !== 'undefined') {
+		const event = gameState.handleLogLine(line);
+		if (event) {
+			gameState.queueEvent(event);
+		}
+	}
 }
 
 function appendAgentCreated(entry) {
@@ -606,6 +676,12 @@ function appendGameInfo(info) {
 	details.appendChild(block);
 	currentBody.appendChild(details);
 	maybeScrollToBottom();
+	
+	// Update visual board
+	if (typeof gameState !== 'undefined' && typeof visualBoardRenderer !== 'undefined') {
+		gameState.handleGameInfo(info);
+		visualBoardRenderer.initialize();
+	}
 }
 
 // SSE connection
@@ -642,6 +718,715 @@ es.onerror = () => {
 		statusEl.classList.remove("live");
 	}
 };
+
+// ==================== Visual Game Board ====================
+
+// Game State Manager
+class GameStateManager {
+	constructor() {
+		this.reset();
+		this.eventQueue = [];
+		this.processing = false;
+		this.paused = false;
+		this.speed = 1; // 1x speed
+		this.baseDelay = 1500; // Base delay in ms between events
+	}
+
+	reset() {
+		this.players = [];
+		this.currentRound = 0;
+		this.totalRounds = 0;
+		this.currentAsker = null;
+		this.currentTarget = null;
+		this.phase = 'setup';
+		this.location = '???';
+		this.currentQuestion = null;
+		this.currentAnswer = null;
+		this.isHumanPlayer = false;
+		this.eventQueue = [];
+		this.processing = false;
+	}
+
+	setSpeed(speed) {
+		this.speed = speed;
+	}
+
+	setPaused(paused) {
+		this.paused = paused;
+		if (!paused && !this.processing) {
+			this.processQueue();
+		}
+	}
+
+	queueEvent(event) {
+		if (event) {
+			this.eventQueue.push(event);
+			if (!this.processing && !this.paused) {
+				this.processQueue();
+			}
+		}
+	}
+
+	async processQueue() {
+		if (this.processing || this.paused || this.eventQueue.length === 0) {
+			return;
+		}
+
+		this.processing = true;
+		
+		while (this.eventQueue.length > 0 && !this.paused) {
+			const event = this.eventQueue.shift();
+			visualBoardRenderer.handleEvent(event);
+			
+			// Delay between events based on speed
+			const delay = this.baseDelay / this.speed;
+			await new Promise(resolve => setTimeout(resolve, delay));
+		}
+		
+		this.processing = false;
+	}
+
+	handleGameInfo(data) {
+		this.players = data.players.map((p, idx) => ({
+			id: idx,
+			name: p.name,
+			role: p.role,
+			isSpy: p.isSpy,
+			isHuman: p.name === 'You',
+			eliminated: false,
+			suspected: false,
+			votes: 0,
+			avatar: this.getPlayerAvatar(p.name),
+			color: this.getPlayerColor(idx)
+		}));
+		this.totalRounds = data.config.rounds || 9;
+		this.location = data.players.find(p => p.name === 'You')?.role || '???';
+		this.isHumanPlayer = data.players.some(p => p.name === 'You');
+		this.phase = 'questions';
+		this.actualLocation = null;
+		this.accusedPlayer = null;
+		this.spyPlayer = null;
+		this.winner = null;
+	}
+
+	handleLogLine(line) {
+		// Trim the line to remove leading/trailing whitespace (including newlines)
+		const trimmedLine = line.trim();
+		
+		// Parse different line patterns
+		const turnMatch = trimmedLine.match(/^([\w-]+) ➔ ([\w-]+)$/);
+		if (turnMatch) {
+			this.currentAsker = this.findPlayerByName(turnMatch[1]);
+			this.currentTarget = this.findPlayerByName(turnMatch[2]);
+			return { type: 'turn', asker: this.currentAsker, target: this.currentTarget };
+		}
+
+		const questionMatch = trimmedLine.match(/^Q: (.+)$/);
+		if (questionMatch) {
+			this.currentQuestion = questionMatch[1];
+			return { type: 'question', text: this.currentQuestion, asker: this.currentAsker, target: this.currentTarget };
+		}
+
+		const answerMatch = trimmedLine.match(/^A: (.+)$/);
+		if (answerMatch) {
+			this.currentAnswer = answerMatch[1];
+			return { type: 'answer', text: this.currentAnswer, target: this.currentTarget };
+		}
+
+		const roundMatch = trimmedLine.match(/^\[Round (\d+)\]$/);
+		if (roundMatch) {
+			this.currentRound = parseInt(roundMatch[1]);
+			this.currentQuestion = null;
+			this.currentAnswer = null;
+			return { type: 'round', round: this.currentRound };
+		}
+
+		if (trimmedLine.includes('VOTING PHASE')) {
+			this.phase = 'voting';
+			// Reset vote counts
+			this.players.forEach(p => p.votes = 0);
+			return { type: 'phase', phase: 'voting' };
+		}
+
+		// Parse votes: "PlayerName voted for: TargetName (reason)"
+		const voteMatch = trimmedLine.match(/^([\w-]+) voted for: ([\w-]+)/);
+		if (voteMatch) {
+			const voter = this.findPlayerByName(voteMatch[1]);
+			const target = this.findPlayerByName(voteMatch[2]);
+			if (target) {
+				target.votes = (target.votes || 0) + 1;
+			}
+			return { type: 'vote', voter, target };
+		}
+
+		// Parse verdict: "⚖️ VERDICT: The group accuses PlayerName!"
+		const verdictMatch = trimmedLine.match(/VERDICT: (?:A tie|The group accuses ([\w-]+)!)/);
+		if (verdictMatch) {
+			this.phase = 'verdict';
+			this.accusedPlayer = verdictMatch[1] ? this.findPlayerByName(verdictMatch[1]) : null;
+			return { type: 'verdict', accused: this.accusedPlayer };
+		}
+
+		// Parse spy reveal: "🕵️ REVEAL: The Spy was indeed PlayerName!"
+		const revealMatch = trimmedLine.match(/REVEAL: The Spy was (?:indeed )?([\w-]+)!/);
+		if (revealMatch) {
+			this.spyPlayer = this.findPlayerByName(revealMatch[1]);
+			return { type: 'reveal', spy: this.spyPlayer };
+		}
+
+		// Parse actual location: "📍 ACTUAL LOCATION: LocationName"
+		const locationMatch = trimmedLine.match(/ACTUAL LOCATION: (.+)$/);
+		if (locationMatch) {
+			this.actualLocation = locationMatch[1];
+			return { type: 'location_reveal', location: this.actualLocation };
+		}
+
+		// Parse result: "🏆 RESULT: SPY WINS!" or "🏆 RESULT: CIVILIANS WIN!"
+		const resultMatch = trimmedLine.match(/RESULT: (SPY|CIVILIANS) WIN/);
+		if (resultMatch) {
+			this.winner = resultMatch[1].toLowerCase();
+			return { type: 'result', winner: this.winner, message: trimmedLine };
+		}
+
+		const reactionMatch = trimmedLine.match(/^\s+(.) ([\w-]+): "(.+)"$/);
+		if (reactionMatch) {
+			return { 
+				type: 'reaction', 
+				emoji: reactionMatch[1], 
+				player: this.findPlayerByName(reactionMatch[2]),
+				text: reactionMatch[3]
+			};
+		}
+
+		return null;
+	}
+
+	findPlayerByName(name) {
+		return this.players.find(p => p.name === name);
+	}
+
+	getPlayerAvatar(name) {
+		if (name === 'You') return '👤';
+		if (name.includes('GPT')) return '🤖';
+		if (name.includes('Claude')) return '🤖';
+		if (name.includes('Gemini')) return '🤖';
+		return '🤖';
+	}
+
+	getPlayerColor(index) {
+		const colors = ['#a78bfa', '#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#ec4899', '#14b8a6', '#f97316'];
+		return colors[index % colors.length];
+	}
+}
+
+// Visual Board Renderer
+class VisualBoardRenderer {
+	constructor(stateManager) {
+		this.state = stateManager;
+		this.playerRing = document.getElementById('playerRing');
+		this.turnArrow = document.getElementById('turnArrow');
+		this.arrowLine = document.getElementById('arrowLine');
+		this.currentRoundEl = document.getElementById('currentRound');
+		this.totalRoundsEl = document.getElementById('totalRounds');
+		this.currentPhaseEl = document.getElementById('currentPhase');
+		this.currentLocationEl = document.getElementById('currentLocation');
+		this.turnInfo = document.getElementById('turnInfo');
+		this.askerName = document.getElementById('askerName');
+		this.targetName = document.getElementById('targetName');
+		this.dialogDisplay = document.getElementById('dialogDisplay');
+		this.reactionsContainer = document.getElementById('reactionsContainer');
+		this.playerCards = new Map();
+		this.currentBubbles = [];
+		this.currentAsker = null;
+		this.currentTarget = null;
+	}
+
+	initialize() {
+		this.renderPlayers();
+		this.updateGameStatus();
+		this.dialogDisplay.innerHTML = '';
+	}
+
+	renderPlayers() {
+		this.playerRing.innerHTML = '';
+		this.playerCards.clear();
+
+		const playerCount = this.state.players.length;
+		const radius = 250; // Distance from center
+		const centerX = 300;
+		const centerY = 300;
+
+		this.state.players.forEach((player, index) => {
+			const angle = (360 / playerCount) * index - 90; // Start from top
+			const rad = (angle * Math.PI) / 180;
+			const x = centerX + radius * Math.cos(rad);
+			const y = centerY + radius * Math.sin(rad);
+
+			const card = this.createPlayerCard(player, x, y);
+			this.playerRing.appendChild(card);
+			this.playerCards.set(player.name, card);
+		});
+	}
+
+	createPlayerCard(player, x, y) {
+		const card = document.createElement('div');
+		card.className = 'player-card';
+		card.style.left = `${x}px`;
+		card.style.top = `${y}px`;
+		card.dataset.playerId = player.id;
+
+		// Avatar
+		const avatar = document.createElement('div');
+		avatar.className = 'player-avatar';
+		avatar.textContent = player.avatar;
+		card.appendChild(avatar);
+
+		// Name
+		const name = document.createElement('div');
+		name.className = 'player-name';
+		name.textContent = player.name;
+		card.appendChild(name);
+
+		// Status
+		const status = document.createElement('div');
+		status.className = 'player-status';
+		status.textContent = 'idle';
+		card.appendChild(status);
+
+		// Thinking dots
+		const thinkingDots = document.createElement('div');
+		thinkingDots.className = 'thinking-dots';
+		thinkingDots.innerHTML = '<span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span>';
+		card.appendChild(thinkingDots);
+
+		return card;
+	}
+
+	updateGameStatus() {
+		if (this.currentRoundEl && this.state.currentRound) {
+			this.currentRoundEl.textContent = this.state.currentRound;
+		} else if (this.currentRoundEl) {
+			this.currentRoundEl.textContent = '-';
+		}
+		if (this.totalRoundsEl) {
+			this.totalRoundsEl.textContent = this.state.totalRounds || '-';
+		}
+		if (this.currentPhaseEl) {
+			this.currentPhaseEl.textContent = this.capitalizePhase(this.state.phase);
+		}
+		if (this.currentLocationEl) {
+			this.currentLocationEl.textContent = this.state.location;
+		}
+	}
+
+	updateRound(round) {
+		if (round && round > 0) {
+			this.state.currentRound = round;
+			if (this.currentRoundEl) {
+				this.currentRoundEl.textContent = round;
+			}
+		}
+	}
+
+	capitalizePhase(phase) {
+		return phase.charAt(0).toUpperCase() + phase.slice(1);
+	}
+
+	handleEvent(event) {
+		switch (event.type) {
+			case 'turn':
+				this.updateTurn(event.asker, event.target);
+				break;
+			case 'question':
+				this.showQuestion(event.text, event.asker);
+				break;
+			case 'answer':
+				this.showAnswer(event.text, event.target);
+				break;
+			case 'round':
+				this.updateRound(event.round);
+				break;
+			case 'phase':
+				this.updatePhase(event.phase);
+				break;
+			case 'vote':
+				this.showVote(event.voter, event.target);
+				break;
+			case 'verdict':
+				this.showVerdict(event.accused);
+				break;
+			case 'reveal':
+				this.showSpyReveal(event.spy);
+				break;
+			case 'location_reveal':
+				this.showLocationReveal(event.location);
+				break;
+			case 'result':
+				this.showResult(event.winner, event.message);
+				break;
+			case 'reaction':
+				this.showReaction(event.emoji, event.player, event.text);
+				break;
+		}
+	}
+
+	updateTurn(asker, target) {
+		// Store current turn players
+		this.currentAsker = asker;
+		this.currentTarget = target;
+
+		// Clear previous states
+		this.playerCards.forEach(card => {
+			card.classList.remove('active', 'target', 'thinking');
+			const status = card.querySelector('.player-status');
+			status.textContent = 'idle';
+		});
+
+		// Clear previous speech bubbles
+		this.clearBubbles();
+
+		if (asker && target) {
+			// Set active states
+			const askerCard = this.playerCards.get(asker.name);
+			const targetCard = this.playerCards.get(target.name);
+
+			if (askerCard) {
+				askerCard.classList.add('active');
+				askerCard.querySelector('.player-status').textContent = 'asking';
+			}
+
+			if (targetCard) {
+				targetCard.classList.add('target', 'thinking');
+				targetCard.querySelector('.player-status').textContent = 'answering';
+			}
+
+			// Update turn info
+			this.askerName.textContent = asker.name;
+			this.targetName.textContent = target.name;
+			this.turnInfo.style.display = 'block';
+
+			// Hide arrow (removed as per user request)
+			this.turnArrow.style.display = 'none';
+		}
+	}
+
+	clearBubbles() {
+		this.currentBubbles.forEach(bubble => bubble.remove());
+		this.currentBubbles = [];
+	}
+
+	positionBubbleNearPlayer(bubble, playerCard, preferredSide = 'auto') {
+		const boardRect = this.playerRing.getBoundingClientRect();
+		const cardRect = playerCard.getBoundingClientRect();
+		
+		// Calculate position relative to the board
+		const cardCenterX = cardRect.left + cardRect.width / 2 - boardRect.left;
+		const cardCenterY = cardRect.top + cardRect.height / 2 - boardRect.top;
+		
+		// Determine best position based on card location in circle
+		const boardCenterX = boardRect.width / 2;
+		const boardCenterY = boardRect.height / 2;
+		const angle = Math.atan2(cardCenterY - boardCenterY, cardCenterX - boardCenterX);
+		
+		let position, direction;
+		
+		if (preferredSide === 'auto') {
+			// Position bubble away from center
+			if (Math.abs(angle) < Math.PI / 4) {
+				// Right side
+				position = { left: cardCenterX + 80, top: cardCenterY - 40 };
+				direction = 'from-left';
+			} else if (Math.abs(angle) > (3 * Math.PI) / 4) {
+				// Left side
+				position = { left: cardCenterX - 280 - 80, top: cardCenterY - 40 };
+				direction = 'from-right';
+			} else if (angle > 0) {
+				// Bottom
+				position = { left: cardCenterX - 140, top: cardCenterY + 80 };
+				direction = 'from-top';
+			} else {
+				// Top
+				position = { left: cardCenterX - 140, top: cardCenterY - 120 };
+				direction = 'from-bottom';
+			}
+		}
+		
+		// Clamp to board bounds
+		position.left = Math.max(10, Math.min(position.left, boardRect.width - 290));
+		position.top = Math.max(10, Math.min(position.top, boardRect.height - 100));
+		
+		bubble.style.left = position.left + 'px';
+		bubble.style.top = position.top + 'px';
+		bubble.classList.add(direction);
+	}
+
+	showQuestion(text, asker) {
+		// Use passed asker or fallback to stored value
+		const askerPlayer = asker || this.currentAsker;
+		const askerCard = this.playerCards.get(askerPlayer?.name);
+		if (!askerCard) return;
+
+		const bubble = document.createElement('div');
+		bubble.className = 'speech-bubble question';
+		
+		const label = document.createElement('div');
+		label.className = 'speech-bubble-label';
+		label.textContent = `${askerPlayer?.name || '?'} asks`;
+		
+		const textEl = document.createElement('div');
+		textEl.className = 'speech-bubble-text';
+		textEl.textContent = text;
+		
+		bubble.appendChild(label);
+		bubble.appendChild(textEl);
+		
+		this.dialogDisplay.appendChild(bubble);
+		this.currentBubbles.push(bubble);
+		
+		// Position after DOM insertion so we can measure
+		setTimeout(() => {
+			this.positionBubbleNearPlayer(bubble, askerCard);
+		}, 10);
+	}
+
+	showAnswer(text, target) {
+		// Use passed target or fallback to stored value
+		const targetPlayer = target || this.currentTarget;
+		const targetCard = this.playerCards.get(targetPlayer?.name);
+		if (!targetCard) return;
+
+		const bubble = document.createElement('div');
+		bubble.className = 'speech-bubble answer';
+		
+		const label = document.createElement('div');
+		label.className = 'speech-bubble-label';
+		label.textContent = `${targetPlayer?.name || '?'} answers`;
+		
+		const textEl = document.createElement('div');
+		textEl.className = 'speech-bubble-text';
+		textEl.textContent = text;
+		
+		bubble.appendChild(label);
+		bubble.appendChild(textEl);
+		
+		this.dialogDisplay.appendChild(bubble);
+		this.currentBubbles.push(bubble);
+		
+		// Remove thinking state from target
+		targetCard.classList.remove('thinking');
+		
+		// Position after DOM insertion so we can measure
+		setTimeout(() => {
+			this.positionBubbleNearPlayer(bubble, targetCard);
+		}, 10);
+	}
+
+	drawArrow(fromRect, toRect) {
+		const containerRect = this.playerRing.getBoundingClientRect();
+		const fromX = fromRect.left + fromRect.width / 2 - containerRect.left;
+		const fromY = fromRect.top + fromRect.height / 2 - containerRect.top;
+		const toX = toRect.left + toRect.width / 2 - containerRect.left;
+		const toY = toRect.top + toRect.height / 2 - containerRect.top;
+
+		this.arrowLine.setAttribute('x1', fromX);
+		this.arrowLine.setAttribute('y1', fromY);
+		this.arrowLine.setAttribute('x2', toX);
+		this.arrowLine.setAttribute('y2', toY);
+		this.turnArrow.style.display = 'block';
+	}
+
+	showReaction(emoji, player, text) {
+		const playerCard = this.playerCards.get(player?.name);
+		if (!playerCard) return;
+
+		const cardRect = playerCard.getBoundingClientRect();
+		const reaction = document.createElement('div');
+		reaction.className = 'reaction-popup';
+		reaction.style.left = `${cardRect.left + cardRect.width / 2}px`;
+		reaction.style.top = `${cardRect.top - 40}px`;
+		reaction.innerHTML = `
+			<span class="reaction-emoji">${emoji}</span>
+			<span class="reaction-text">"${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"</span>
+		`;
+
+		this.reactionsContainer.appendChild(reaction);
+
+		// Remove after animation
+		setTimeout(() => {
+			reaction.remove();
+		}, 3000);
+	}
+
+	updatePhase(phase) {
+		this.state.phase = phase;
+		this.updateGameStatus();
+
+		if (phase === 'voting') {
+			// Hide turn arrow and clear bubbles for voting
+			this.turnArrow.style.display = 'none';
+			this.turnInfo.style.display = 'none';
+			this.clearBubbles();
+			// Clear active states
+			this.playerCards.forEach(card => {
+				card.classList.remove('active', 'target', 'thinking');
+			});
+		} else if (phase === 'verdict') {
+			this.turnArrow.style.display = 'none';
+			this.turnInfo.style.display = 'none';
+		}
+	}
+
+	showVote(voter, target) {
+		if (!target) return;
+		const targetCard = this.playerCards.get(target.name);
+		if (!targetCard) return;
+
+		// Update vote count badge
+		let voteBadge = targetCard.querySelector('.vote-badge');
+		if (!voteBadge) {
+			voteBadge = document.createElement('div');
+			voteBadge.className = 'vote-badge';
+			targetCard.appendChild(voteBadge);
+		}
+		voteBadge.textContent = `${target.votes || 0} 🗳️`;
+		voteBadge.style.display = 'block';
+
+		// Add suspected state
+		if (target.votes > 0) {
+			targetCard.classList.add('suspected');
+		}
+	}
+
+	showVerdict(accused) {
+		this.clearBubbles();
+		
+		// Highlight the accused player
+		if (accused) {
+			const accusedCard = this.playerCards.get(accused.name);
+			if (accusedCard) {
+				accusedCard.classList.add('accused');
+				const status = accusedCard.querySelector('.player-status');
+				status.textContent = 'ACCUSED';
+			}
+		}
+
+		// Show verdict message in center
+		const verdictEl = document.createElement('div');
+		verdictEl.className = 'center-announcement verdict';
+		verdictEl.textContent = accused ? `${accused.name} is accused!` : 'It\'s a tie!';
+		this.dialogDisplay.appendChild(verdictEl);
+		this.currentBubbles.push(verdictEl);
+	}
+
+	showSpyReveal(spy) {
+		if (!spy) return;
+		const spyCard = this.playerCards.get(spy.name);
+		if (!spyCard) return;
+
+		// Mark spy card
+		spyCard.classList.add('revealed-spy');
+		const status = spyCard.querySelector('.player-status');
+		status.textContent = '🕵️ SPY';
+
+		// Add spy emoji to avatar
+		const avatar = spyCard.querySelector('.player-avatar');
+		if (avatar && !avatar.textContent.includes('🕵️')) {
+			avatar.textContent = '🕵️';
+		}
+	}
+
+	showLocationReveal(location) {
+		// Update location display
+		this.currentLocationEl.textContent = location;
+		this.currentLocationEl.style.color = 'var(--green)';
+	}
+
+	showResult(winner, message) {
+		this.clearBubbles();
+
+		// Show winner announcement
+		const resultEl = document.createElement('div');
+		resultEl.className = `center-announcement result ${winner}-wins`;
+		resultEl.innerHTML = `
+			<div class="result-icon">${winner === 'spy' ? '🕵️' : '👥'}</div>
+			<div class="result-text">${winner.toUpperCase()} WIN${winner === 'spy' ? 'S' : ''}!</div>
+		`;
+		this.dialogDisplay.appendChild(resultEl);
+		this.currentBubbles.push(resultEl);
+
+		// Highlight winning players
+		this.playerCards.forEach(card => {
+			const playerName = card.querySelector('.player-name')?.textContent;
+			const player = this.state.players.find(p => p.name === playerName);
+			if (!player) return;
+
+			const isWinner = (winner === 'spy' && player.isSpy) || (winner === 'civilians' && !player.isSpy);
+			if (isWinner) {
+				card.classList.add('winner');
+				const status = card.querySelector('.player-status');
+				status.textContent = '🏆 WINNER';
+			} else {
+				card.classList.add('loser');
+			}
+		});
+	}
+}
+
+// Global instances
+const gameState = new GameStateManager();
+const visualBoardRenderer = new VisualBoardRenderer(gameState);
+
+// View toggle handlers
+const visualViewBtn = document.getElementById('visualViewBtn');
+const logViewBtn = document.getElementById('logViewBtn');
+const visualBoardEl = document.getElementById('visualBoard');
+const pauseBtn = document.getElementById('pauseBtn');
+const speedButtons = document.querySelectorAll('.speed-btn');
+
+if (visualViewBtn && logViewBtn) {
+	visualViewBtn.addEventListener('click', () => {
+		visualBoardEl.style.display = 'flex';
+		logEl.style.display = 'none';
+		visualViewBtn.classList.add('active');
+		logViewBtn.classList.remove('active');
+	});
+
+	logViewBtn.addEventListener('click', () => {
+		visualBoardEl.style.display = 'none';
+		logEl.style.display = 'block';
+		visualViewBtn.classList.remove('active');
+		logViewBtn.classList.add('active');
+	});
+}
+
+// Pause/Resume control
+if (pauseBtn) {
+	pauseBtn.addEventListener('click', () => {
+		gameState.paused = !gameState.paused;
+		if (gameState.paused) {
+			pauseBtn.textContent = '▶️';
+			pauseBtn.classList.add('paused');
+			pauseBtn.title = 'Resume';
+		} else {
+			pauseBtn.textContent = '⏸️';
+			pauseBtn.classList.remove('paused');
+			pauseBtn.title = 'Pause';
+			gameState.processQueue();
+		}
+	});
+}
+
+// Speed controls
+speedButtons.forEach(btn => {
+	btn.addEventListener('click', () => {
+		const speed = parseFloat(btn.dataset.speed);
+		gameState.setSpeed(speed);
+		
+		// Update active state
+		speedButtons.forEach(b => b.classList.remove('active'));
+		btn.classList.add('active');
+	});
+});
 
 // Start game
 startBtn.addEventListener("click", async () => {

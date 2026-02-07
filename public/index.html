@@ -18,6 +18,11 @@
 		</div>
 	</header>
 
+	<!-- Provider Status Banner -->
+	<div id="providerStatusBanner" class="provider-status-banner" style="display:none;">
+		<!-- Will be populated by JS -->
+	</div>
+
 	<!-- Config Panel (centered) -->
 	<div id="configPanel">
 		<div class="config-card">
@@ -83,7 +88,80 @@
 
 	<!-- Game Panel (log output) -->
 	<div id="gamePanel">
-		<div id="log"></div>
+		<!-- View Toggle -->
+		<div class="game-view-toggle">
+			<button id="visualViewBtn" class="view-btn active">🎭 Visual</button>
+			<button id="logViewBtn" class="view-btn">📜 Log</button>
+			<div class="divider"></div>
+			<button id="pauseBtn" class="control-btn" title="Pause/Resume">⏸️</button>
+			<div class="speed-controls">
+				<span class="speed-label">Speed:</span>
+				<button id="speed05" class="speed-btn" data-speed="0.5">0.5x</button>
+				<button id="speed10" class="speed-btn active" data-speed="1">1x</button>
+				<button id="speed15" class="speed-btn" data-speed="1.5">1.5x</button>
+				<button id="speed20" class="speed-btn" data-speed="2">2x</button>
+			</div>
+		</div>
+
+		<!-- Visual Game Board -->
+		<div id="visualBoard" class="visual-board">
+			<!-- Game Status Bar -->
+			<div class="game-status-bar">
+				<div class="status-item">
+					<span class="status-label">Round:</span>
+					<span id="currentRound" class="status-value">-</span>/<span id="totalRounds" class="status-value">-</span>
+				</div>
+				<div class="status-item">
+					<span class="status-label">Phase:</span>
+					<span id="currentPhase" class="status-value">Setup</span>
+				</div>
+				<div class="status-item">
+					<span class="status-label">Location:</span>
+					<span id="currentLocation" class="status-value">???</span>
+				</div>
+			</div>
+
+			<!-- Player Ring Container -->
+			<div class="player-ring-container">
+				<div id="playerRing" class="player-ring">
+					<!-- Player cards will be added here dynamically -->
+				</div>
+
+				<!-- Turn Indicator (Arrow) -->
+				<svg id="turnArrow" class="turn-arrow" style="display:none;">
+					<defs>
+						<marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+							<polygon points="0 0, 10 3, 0 6" fill="var(--accent)" />
+						</marker>
+					</defs>
+					<line id="arrowLine" x1="0" y1="0" x2="0" y2="0" 
+						  stroke="var(--accent)" stroke-width="3" 
+						  marker-end="url(#arrowhead)" />
+				</svg>
+
+				<!-- Center Info Display -->
+				<div class="center-display">
+					<div id="turnInfo" class="turn-info" style="display:none;">
+						<div class="turn-players">
+							<span id="askerName" class="asker-name"></span>
+							<span class="turn-arrow-icon">→</span>
+							<span id="targetName" class="target-name"></span>
+						</div>
+					</div>
+				</div>
+
+				<!-- Dialog Display - Speech bubbles positioned near players -->
+				<div id="dialogDisplay" class="dialog-display">
+					<!-- Speech bubbles will be positioned absolutely near players -->
+				</div>
+			</div>
+
+			<!-- Reactions Container -->
+			<div id="reactionsContainer" class="reactions-container"></div>
+		</div>
+
+		<!-- Text Log (traditional view) -->
+		<div id="log" style="display:none;"></div>
 	</div>
 
 	<!-- Analytics Panel -->
