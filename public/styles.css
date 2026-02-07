@@ -41,6 +41,43 @@ h1 {
 	color: var(--accent);
 }
 
+/* Provider Status Banner */
+.provider-status-banner {
+	padding: 0.75rem 1.5rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	border-bottom: 1px solid var(--border);
+	font-size: 0.875rem;
+}
+
+.provider-status-banner.warning {
+	background: rgba(245, 158, 11, 0.1);
+	border-bottom-color: rgba(245, 158, 11, 0.3);
+	color: #f59e0b;
+}
+
+.provider-status-banner.success {
+	background: rgba(34, 197, 94, 0.1);
+	border-bottom-color: rgba(34, 197, 94, 0.3);
+	color: var(--green);
+}
+
+.banner-icon {
+	font-size: 1.25rem;
+}
+
+.banner-text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.banner-subtext {
+	font-size: 0.75rem;
+	opacity: 0.8;
+}
+
 .status {
 	font-size: 0.875rem;
 	color: var(--muted);

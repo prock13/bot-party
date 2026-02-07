@@ -15,6 +15,7 @@ import { AIProvider, ProviderConfig, ProviderType } from "./types";
 import { OpenAIProvider } from "./openai.provider";
 import { AnthropicProvider } from "./anthropic.provider";
 import { GoogleProvider } from "./google.provider";
+import { hasAPIKey } from "./validation";
 
 /** Create a provider instance from config */
 export function createProvider(config: ProviderConfig): AIProvider {
@@ -52,6 +53,7 @@ export function getProviderDisplayName(type: ProviderType): string {
 export interface ProviderInfo {
     displayName: string;
     supportsStateful: boolean;
+    configured: boolean;
 }
 
 /** Get capabilities for all providers (for client-side config UI) */
@@ -62,14 +64,17 @@ export function getProviderCapabilities(): Record<ProviderType, ProviderInfo> {
         openai: {
             displayName: "GPT",
             supportsStateful: true,
+            configured: hasAPIKey("openai"),
         },
         anthropic: {
             displayName: "Claude",
             supportsStateful: false,
+            configured: hasAPIKey("anthropic"),
         },
         google: {
             displayName: "Gemini",
             supportsStateful: true,
+            configured: hasAPIKey("google"),
         },
     };
     return result;

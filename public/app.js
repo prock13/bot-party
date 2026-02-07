@@ -67,9 +67,53 @@ async function loadProviderInfo() {
 	}
 }
 
+// Update the provider status banner
+function updateProviderStatusBanner() {
+	const banner = document.getElementById('providerStatusBanner');
+	if (!banner) return;
+
+	const configured = [];
+	const missing = [];
+	
+	for (const [type, info] of Object.entries(providerInfo)) {
+		if (type === 'human') continue;
+		if (info.configured) {
+			configured.push(info.displayName);
+		} else {
+			missing.push(info.displayName);
+		}
+	}
+
+	if (missing.length > 0) {
+		banner.style.display = 'block';
+		banner.className = 'provider-status-banner warning';
+		banner.innerHTML = `
+			<span class="banner-icon">⚠️</span>
+			<span class="banner-text">
+				<strong>Missing API Keys:</strong> ${missing.join(', ')}
+				${configured.length > 0 ? `<span class="banner-subtext">Available: ${configured.join(', ')}</span>` : ''}
+			</span>
+		`;
+	} else if (configured.length > 0) {
+		banner.style.display = 'block';
+		banner.className = 'provider-status-banner success';
+		banner.innerHTML = `
+			<span class="banner-icon">✓</span>
+			<span class="banner-text">All providers configured: ${configured.join(', ')}</span>
+		`;
+	} else {
+		banner.style.display = 'none';
+	}
+}
+
 // Check if a provider type supports stateful mode
 function supportsStateful(type) {
 	return providerInfo[type]?.supportsStateful ?? false;
+}
+
+// Check if a provider has an API key configured
+function isProviderConfigured(type) {
+	return providerInfo[type]?.configured ?? false;
 }
 
 function renderPlayers() {
@@ -89,18 +133,32 @@ function renderPlayers() {
 		getPlayerTypes().forEach(pt => {
 			const opt = document.createElement("option");
 			opt.value = pt.value;
-			opt.textContent = pt.label;
+			// Mark unconfigured providers
+			if (pt.value !== 'human' && !isProviderConfigured(pt.value)) {
+				opt.textContent = pt.label + ' (No API Key)';
+				opt.disabled = true;
+				opt.style.color = '#666';
+			} else {
+				opt.textContent = pt.label;
+			}
 			if (pt.value === player.type) opt.selected = true;
 			typeSelect.appendChild(opt);
 		});
 		typeSelect.addEventListener("change", (e) => {
-			players[index].type = e.target.value;
+			const newType = e.target.value;
+			// Prevent selection of unconfigured providers
+			if (newType !== 'human' && !isProviderConfigured(newType)) {
+				alert(`Cannot select ${providerInfo[newType]?.displayName || newType}: API key not configured. Please add the API key to your .env file.`);
+				e.target.value = player.type; // Revert to previous selection
+				return;
+			}
+			players[index].type = newType;
 			// Reset mode to memory if switching to a type that doesn't support stateful
-			if (!supportsStateful(e.target.value)) {
+			if (!supportsStateful(newType)) {
 				players[index].mode = "memory";
 			}
 			// Reset personality to neutral when switching to human
-			if (e.target.value === "human") {
+			if (newType === "human") {
 				players[index].personality = undefined;
 			} else if (!players[index].personality) {
 				players[index].personality = "neutral";
@@ -180,8 +238,12 @@ addPlayerBtn.addEventListener("click", () => {
 		alert("Maximum 8 players.");
 		return;
 	}
-	// Cycle through AI providers for new players
-	const aiTypes = ["openai", "anthropic", "google"];
+	// Cycle through AI providers for new players, skip unconfigured ones
+	const aiTypes = ["openai", "anthropic", "google"].filter(type => isProviderConfigured(type));
+	if (aiTypes.length === 0) {
+		alert("No AI providers configured. Please add API keys to your .env file.");
+		return;
+	}
 	const aiCount = players.filter(p => p.type !== "human").length;
 	const nextType = aiTypes[aiCount % aiTypes.length];
 	players.push({ type: nextType, mode: "memory", personality: "neutral" });
