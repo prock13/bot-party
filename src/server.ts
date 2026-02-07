@@ -136,11 +136,19 @@ async function handleStart(res: ServerResponse, queryString: string): Promise<vo
     
     // Parse locationName option (if provided)
     const locationName = params.get("location") || undefined;
+    
+    // Parse reactionFrequency option (default: "sometimes")
+    const reactionFreqParam = params.get("reactionFrequency");
+    const validFrequencies = ["always", "frequent", "sometimes", "rare", "never"];
+    const reactionFrequency = (reactionFreqParam && validFrequencies.includes(reactionFreqParam))
+        ? reactionFreqParam as "always" | "frequent" | "sometimes" | "rare" | "never"
+        : "sometimes";
 
     const config: GameConfig = {
         rounds,
         allowEarlyVote,
         locationName,
+        reactionFrequency,
         playerSlots,
     };
 

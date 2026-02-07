@@ -17,6 +17,7 @@ export async function runQuestionRounds(
     controllers: Map<PlayerId, PlayerController>,
     pack: LocationPack,
     allowEarlyVote: boolean,
+    reactionFrequency: "always" | "frequent" | "sometimes" | "rare" | "never",
     ctx: LogContext
 ): Promise<RoundsResult> {
     const { log } = ctx;
@@ -77,7 +78,7 @@ export async function runQuestionRounds(
         log(`Q: ${rawAsk.question}`);
 
         const questionReactors = players.filter(p => p.id !== currentAsker.id && p.id !== target.id && !p.isHuman);
-        await collectReactions(questionReactors, controllers, "question", currentAsker.name, rawAsk.question, ctx);
+        await collectReactions(questionReactors, controllers, "question", currentAsker.name, rawAsk.question, ctx, reactionFrequency);
 
         const targetCtl = controllers.get(target.id)!;
         const rawAnswer = await targetCtl.answer(currentAsker.name, rawAsk.question, target);
@@ -95,7 +96,7 @@ export async function runQuestionRounds(
         }
 
         const answerReactors = players.filter(p => p.id !== currentAsker.id && p.id !== target.id && !p.isHuman);
-        await collectReactions(answerReactors, controllers, "answer", target.name, publicAnswer, ctx);
+        await collectReactions(answerReactors, controllers, "answer", target.name, publicAnswer, ctx, reactionFrequency);
 
         turns.push({ askerId: currentAsker.name, targetId: target.name, question: rawAsk.question, answer: publicAnswer });
 

@@ -9,6 +9,7 @@ const analyticsBtn = document.getElementById("analyticsBtn");
 const statusEl = document.getElementById("status");
 const roundsInput = document.getElementById("roundsInput");
 const allowEarlyVoteInput = document.getElementById("allowEarlyVote");
+const reactionFrequencySelect = document.getElementById("reactionFrequency");
 const playerList = document.getElementById("playerList");
 const addPlayerBtn = document.getElementById("addPlayerBtn");
 const playerCountEl = document.getElementById("playerCount");
@@ -636,6 +637,7 @@ startBtn.addEventListener("click", async () => {
 	try {
 		const rounds = parseInt(roundsInput.value) || 9;
 		const allowEarlyVote = allowEarlyVoteInput?.checked ?? true;
+		const reactionFrequency = reactionFrequencySelect?.value || "sometimes";
 		const selectedLocation = locationSelect.value;
 		
 		// Encode players as "type:mode" pairs (human has no mode)
@@ -647,6 +649,7 @@ startBtn.addEventListener("click", async () => {
 			rounds: rounds.toString(),
 			players: playersParam,
 			allowEarlyVote: allowEarlyVote.toString(),
+			reactionFrequency: reactionFrequency,
 		};
 		
 		// Add location if not random
