@@ -324,6 +324,12 @@ h1 {
 	border-color: var(--accent);
 }
 
+.back-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
+}
+
 /* Game Panel */
 #gamePanel {
 	flex: 1;

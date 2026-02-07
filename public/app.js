@@ -503,6 +503,8 @@ function showConfig() {
 	backBtn.style.display = "none";
 	statusEl.textContent = "Ready";
 	statusEl.classList.remove("live");
+	// Re-enable analytics button when returning to config
+	analyticsBtn.disabled = false;
 }
 
 function showGame() {
@@ -510,6 +512,8 @@ function showGame() {
 	analyticsPanel.style.display = "none";
 	gamePanel.classList.add("active");
 	backBtn.style.display = "inline-block";
+	// Disable analytics button during active game
+	analyticsBtn.disabled = true;
 }
 
 backBtn.addEventListener("click", showConfig);
@@ -1691,6 +1695,8 @@ startBtn.addEventListener("click", async () => {
 		statusEl.textContent = "Error: " + (err instanceof Error ? err.message : String(err));
 		logEl.innerHTML = "";
 		logEl.appendChild(document.createTextNode("[Request failed: " + (err instanceof Error ? err.message : String(err)) + "]"));
+		// Re-enable analytics on error
+		analyticsBtn.disabled = false;
 	} finally {
 		startBtn.disabled = false;
 	}
