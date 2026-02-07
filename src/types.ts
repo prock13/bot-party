@@ -49,6 +49,8 @@ export type GameConfig = {
     allowEarlyVote?: boolean;
     /** Specific location to use (by name). If not provided, picks random. */
     locationName?: string;
+    /** How often AI agents react to questions/answers. Default: "sometimes" */
+    reactionFrequency?: "always" | "frequent" | "sometimes" | "rare" | "never";
     /** Player configurations in order. If not provided, uses legacy config. */
     playerSlots?: PlayerSlotConfig[];
     // Legacy config (used if playerSlots not provided)

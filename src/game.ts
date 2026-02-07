@@ -79,6 +79,7 @@ export class SpyfallGame {
             agents.forEach(a => a.emitCreated());
 
             const allowEarlyVote = config.allowEarlyVote ?? true;
+            const reactionFrequency = config.reactionFrequency ?? "sometimes";
             const ctx = { log: this.log.bind(this) };
             const { turns, earlyEnd } = await runQuestionRounds(
                 config.rounds,
@@ -86,6 +87,7 @@ export class SpyfallGame {
                 controllers,
                 pack,
                 allowEarlyVote,
+                reactionFrequency,
                 ctx
             );
 
