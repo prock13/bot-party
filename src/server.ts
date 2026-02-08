@@ -317,6 +317,68 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
         res.end(JSON.stringify(locationManager.getCount()));
         return;
     }
+    // TTS endpoint
+    if (path === "/api/tts" && req.method === "POST") {
+        try {
+            const body = await readRequestBody(req);
+            const { text, voiceId } = JSON.parse(body);
+            
+            if (!text || typeof text !== 'string') {
+                res.writeHead(400, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Missing or invalid 'text' parameter" }));
+                return;
+            }
+            
+            const apiKey = process.env.ELEVENLABS_API_KEY;
+            if (!apiKey) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "ElevenLabs API key not configured" }));
+                return;
+            }
+            
+            // Default voice if not specified
+            const voice = voiceId || "21m00Tcm4TlvDq8ikWAM"; // Rachel
+            
+            // Call ElevenLabs API
+            const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${voice}`;
+            const response = await fetch(elevenLabsUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                    "xi-api-key": apiKey
+                },
+                body: JSON.stringify({
+                    text,
+                    model_id: "eleven_turbo_v2_5",
+                    voice_settings: {
+                        stability: 0.5,
+                        similarity_boost: 0.75
+                    }
+                })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                res.writeHead(response.status, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: `ElevenLabs API error: ${errorText}` }));
+                return;
+            }
+            
+            // Stream the audio back to client
+            res.writeHead(200, { 
+                "Content-Type": "audio/mpeg",
+                "Transfer-Encoding": "chunked"
+            });
+            
+            const audioData = await response.arrayBuffer();
+            res.end(Buffer.from(audioData));
+        } catch (err) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: err instanceof Error ? err.message : "TTS request failed" }));
+        }
+        return;
+    }
     // Serve static files from public/
     if (req.method === "GET") {
         const filePath = path === "/" ? "index.html" : path.slice(1); // Remove leading /

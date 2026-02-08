@@ -38,6 +38,7 @@ In Spyfall, players are assigned roles at a secret location. One player is the s
   - OpenAI API key
   - Anthropic API key
   - Google AI API key
+- Optional: ElevenLabs API key for voice narration (enables text-to-speech)
 
 ### Installation
 
@@ -73,10 +74,11 @@ Create a `.env` file with the following keys:
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...
+ELEVENLABS_API_KEY=sk_...  # Optional - for voice narration
 PORT=3000
 ```
 
-**Note**: You only need to configure the API keys for providers you want to use.
+**Note**: You only need to configure the API keys for providers you want to use. The `ELEVENLABS_API_KEY` is optional but enables high-quality voice narration for gameplay.
 
 ## Features
 
@@ -123,6 +125,13 @@ Real-time visual representation of the game with:
 - **Spy Reveal**: Dramatic reveal animation at game end
 - **Result Display**: Winner announcement with icons and styling
 - **Playback Controls**: Adjust visualization speed (0.5x to 4x) or pause
+- **Voice Narration**: High-quality text-to-speech powered by ElevenLabs API
+  - Each player assigned unique voice from 8 professional voice actors
+  - Speaks all questions, answers, reactions, votes, and game announcements
+  - Volume control and mute toggle
+  - Enabled by default with automatic browser compatibility handling
+  - Intelligent caching to minimize API usage and costs
+  - 30-second timeout to prevent game hanging on audio issues
 
 Toggle between the classic log view and visual board using the view selector in the game panel.
 

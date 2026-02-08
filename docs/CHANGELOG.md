@@ -2,6 +2,43 @@
 
 All notable changes to the Bot Party project are documented in this file.
 
+## [Unreleased] - Current Development
+
+### Added - February 7, 2026
+
+#### ElevenLabs Voice Narration
+
+**Voice System:**
+- Integrated ElevenLabs API for high-quality text-to-speech narration
+- 8 professional voice actors assigned round-robin to players:
+  - Rachel, Adam, Antoni, Elli, Josh, Arnold, Bella, Domi
+- First player's voice used as narrator for system announcements
+- Speaks all game events: questions, answers, reactions, votes, verdicts, reveals, results
+
+**Audio Manager (`public/app.js`):**
+- Single reusable `<audio>` element to maintain browser autoplay context
+- Promise-based queue system with 30-second timeout per audio
+- LRU cache (max 100 items) to minimize API calls and costs
+- Automatic priming on first user gesture to establish playback permissions
+- Enabled by default with mute/volume controls in UI
+
+**Backend Integration (`src/server.ts`):**
+- New `/api/tts` POST endpoint proxies requests to ElevenLabs API
+- Uses `eleven_turbo_v2_5` model (free tier compatible)
+- Configurable voice settings (stability: 0.5, similarity_boost: 0.75)
+- Streams audio/mpeg response directly to client
+
+**Visual Board Enhancements:**
+- All display methods now async to await audio narration
+- Speech bubbles now shown for voting phase with player name
+- Synchronized voice playback with visual events
+- Continues game progression even if audio fails
+
+**Configuration:**
+- Optional `ELEVENLABS_API_KEY` environment variable
+- Audio controls: mute/unmute toggle, volume slider, playback indicator
+- Graceful degradation if API key not provided (silent mode)
+
 ## [Unreleased] - Phase 4 & 5 Features
 
 ### Added - February 6, 2026

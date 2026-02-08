@@ -1355,21 +1355,23 @@ h1 {
 	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: 8px;
-	padding: 0.5rem 0.75rem;
+	padding: 0.75rem;
 	font-size: 0.875rem;
+	max-width: 280px;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
 }
 
 .reaction-emoji {
 	font-size: 1.25rem;
+	display: block;
+	margin-bottom: 0.4rem;
 }
 
 .reaction-text {
 	color: var(--text);
+	line-height: 1.4;
+	word-wrap: break-word;
 }
 
 /* Animations */
